@@ -1,0 +1,59 @@
+# Drop-in steps for the playwright-automation workflows.
+#
+# Add these to the `merge-report` job of each workflow that should feed the
+# dashboard (smoke.yml, regression.yml, api-tests.yml, targeted.yml, …),
+# immediately after the existing "Generate Allure Report" step.
+#
+# Prerequisites, one-time:
+#   1. An IAM role CI can assume, with the policy in ci/iam-policy.json.
+#   2. Repository variables:
+#        QA_DASHBOARD_BUCKET   e.g. cargomatic-qa-dashboard
+#        AWS_REGION            e.g. us-west-2
+#      and secret (or role ARN variable):
+#        AWS_ROLE_ARN          arn:aws:iam::<account>:role/qa-dashboard-publisher
+#   3. The `qa-dashboard` repo checked out beside the automation repo, or vendor
+#      ci/qa-summary.mjs and ci/domains.generated.json into .github/scripts/.
+#
+# The job needs `id-token: write` for OIDC — smoke.yml's merge-report job
+# already declares it.
+
+# ---------------------------------------------------------------------------
+
+- name: Set up Node for the dashboard summariser
+  uses: actions/setup-node@v4
+  with:
+    node-version: '20'
+
+- name: Check out the QA dashboard tooling
+  uses: actions/checkout@v4
+  with:
+    repository: cargomatic/qa-dashboard      # adjust to your org/repo
+    path: .qa-dashboard
+    # Public repo needs no token; for a private one add:
+    # token: ${{ secrets.QA_DASHBOARD_REPO_TOKEN }}
+
+- name: Configure AWS credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+    aws-region: ${{ vars.AWS_REGION }}
+
+- name: Publish results to the QA dashboard
+  if: always()
+  env:
+    QA_DASHBOARD_BUCKET: ${{ vars.QA_DASHBOARD_BUCKET }}
+    # Consumed by qa-summary.mjs for the run's metadata. WORKFLOW_NAME decides
+    # which workflow bucket the run lands in, so keep it stable across runs —
+    # renaming it starts a fresh trend line.
+    WORKFLOW_NAME: ${{ github.workflow }}
+    RUN_ENV: ${{ github.event.client_payload.environment || github.event.inputs.environment || 'staging' }}
+  run: |
+    bash .qa-dashboard/ci/publish-to-s3.sh \
+      --results reports/allure-results \
+      --report  reports/allure-report
+
+# ---------------------------------------------------------------------------
+# Optional: post the dashboard link to the existing Slack summary by appending
+# this to the payload built in "Generate Test Summary".
+#
+#   https://<distribution>.cloudfront.net/

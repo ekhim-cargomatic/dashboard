@@ -1,0 +1,33 @@
+{
+  "name": "qa-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "QA automation dashboard — Allure results from S3, hosted on S3 + CloudFront",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "gen:domains": "node scripts/gen-domains.mjs",
+    "summary": "node ci/qa-summary.mjs",
+    "fixtures": "node scripts/make-fixtures.mjs",
+    "deploy": "bash infra/deploy.sh"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "js-yaml": "^4.1.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}

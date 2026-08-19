@@ -1,0 +1,23 @@
+{
+  "Comment": "Least-privilege policy for the CI role that publishes runs. Attach to a role CI assumes via OIDC. Replace BUCKET_NAME. Write-only under runs/ — CI cannot delete history or touch the deployed SPA.",
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublishRunArtifacts",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:PutObjectAcl"],
+      "Resource": "arn:aws:s3:::BUCKET_NAME/runs/*"
+    },
+    {
+      "Sid": "ListForSyncDiffing",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::BUCKET_NAME",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": ["runs/*"]
+        }
+      }
+    }
+  ]
+}

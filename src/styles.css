@@ -1,0 +1,768 @@
+/*
+ * Palette tokens.
+ *
+ * Light values live on bare :root; dark redefines only what changes, under both
+ * the OS media query and an explicit [data-theme] stamp so the in-app toggle wins
+ * in either direction.
+ *
+ * Encoding roles (see README § Colour):
+ *   --ramp-*    sequential blue, one hue — every magnitude encoding, 0 (low) to
+ *               8 (high), each with a matching --ramp-N-ink for labels on top
+ *   --status-*  reserved status palette — only ever for test status, and always
+ *               paired with a glyph + label so hue never carries meaning alone
+ */
+
+:root {
+  color-scheme: light;
+
+  --surface-1: #fcfcfb;
+  --surface-2: #f4f4f1;
+  --page: #f9f9f7;
+
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+
+  --gridline: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --ghost: rgba(11, 11, 11, 0.04);
+
+  --accent: #2a78d6;
+
+  /*
+   * The magnitude ramp, low (0) to high (8), plus the ink that stays legible on
+   * each step. Every magnitude encoding reads these rather than raw hex, so dark
+   * mode gets its own *selected* steps below instead of an automatic flip.
+   *
+   * On light, near-zero is the palest step and recedes toward the surface.
+   */
+  --ramp-0: #cde2fb;
+  --ramp-1: #b7d3f6;
+  --ramp-2: #9ec5f4;
+  --ramp-3: #86b6ef;
+  --ramp-4: #6da7ec;
+  --ramp-5: #3987e5;
+  --ramp-6: #2a78d6;
+  --ramp-7: #1c5cab;
+  --ramp-8: #0d366b;
+
+  --ramp-0-ink: #0b0b0b;
+  --ramp-1-ink: #0b0b0b;
+  --ramp-2-ink: #0b0b0b;
+  --ramp-3-ink: #0b0b0b;
+  --ramp-4-ink: #0b0b0b;
+  --ramp-5-ink: #ffffff;
+  --ramp-6-ink: #ffffff;
+  --ramp-7-ink: #ffffff;
+  --ramp-8-ink: #ffffff;
+
+  /* Reserved status palette — fixed, never themed. */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+  --status-muted: #898781;
+
+  --success-text: #006300;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 2px rgba(11, 11, 11, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --surface-1: #1a1a19;
+    --surface-2: #232322;
+    --page: #0d0d0d;
+
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+
+    --gridline: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --ghost: rgba(255, 255, 255, 0.05);
+
+
+    /*
+     * Dark ramp: the same blue scale re-stepped for the dark surface, not a flip
+     * of the light one. Direction reverses on purpose — on a dark ground it is
+     * the *darkest* step that recedes toward the surface, so near-zero is dark
+     * and high magnitude is bright. Reversing keeps "further from the surface
+     * means more" true in both modes.
+     */
+    --ramp-0: #0d366b;
+    --ramp-1: #104281;
+    --ramp-2: #184f95;
+    --ramp-3: #256abf;
+    --ramp-4: #2a78d6;
+    --ramp-5: #3987e5;
+    --ramp-6: #6da7ec;
+    --ramp-7: #9ec5f4;
+    --ramp-8: #cde2fb;
+
+    --ramp-0-ink: #ffffff;
+    --ramp-1-ink: #ffffff;
+    --ramp-2-ink: #ffffff;
+    --ramp-3-ink: #ffffff;
+    --ramp-4-ink: #ffffff;
+    --ramp-5-ink: #0b0b0b;
+    --ramp-6-ink: #0b0b0b;
+    --ramp-7-ink: #0b0b0b;
+    --ramp-8-ink: #0b0b0b;
+    --accent: #3987e5;
+    --success-text: #0ca30c;
+    --shadow: none;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --surface-1: #1a1a19;
+  --surface-2: #232322;
+  --page: #0d0d0d;
+
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+
+  --gridline: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --ghost: rgba(255, 255, 255, 0.05);
+
+
+    /*
+     * Dark ramp: the same blue scale re-stepped for the dark surface, not a flip
+     * of the light one. Direction reverses on purpose — on a dark ground it is
+     * the *darkest* step that recedes toward the surface, so near-zero is dark
+     * and high magnitude is bright. Reversing keeps "further from the surface
+     * means more" true in both modes.
+     */
+    --ramp-0: #0d366b;
+    --ramp-1: #104281;
+    --ramp-2: #184f95;
+    --ramp-3: #256abf;
+    --ramp-4: #2a78d6;
+    --ramp-5: #3987e5;
+    --ramp-6: #6da7ec;
+    --ramp-7: #9ec5f4;
+    --ramp-8: #cde2fb;
+
+    --ramp-0-ink: #ffffff;
+    --ramp-1-ink: #ffffff;
+    --ramp-2-ink: #ffffff;
+    --ramp-3-ink: #ffffff;
+    --ramp-4-ink: #ffffff;
+    --ramp-5-ink: #0b0b0b;
+    --ramp-6-ink: #0b0b0b;
+    --ramp-7-ink: #0b0b0b;
+    --ramp-8-ink: #0b0b0b;
+  --accent: #3987e5;
+  --success-text: #0ca30c;
+  --shadow: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* --------------------------------------------------------------- layout -- */
+
+.app {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 20px 24px 64px;
+}
+
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.topbar h1 {
+  font-size: 19px;
+}
+
+.topbar .sub {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.grid.cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid.split-wide {
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+}
+
+@media (max-width: 1080px) {
+  .grid.cols-2,
+  .grid.split-wide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+section.block {
+  margin-top: 20px;
+}
+
+/* ---------------------------------------------------------------- cards -- */
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 18px;
+  min-width: 0;
+}
+
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.card-head h2 {
+  font-size: 14px;
+}
+
+.card-head .hint,
+.card-sub {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.card-sub {
+  margin: 0 0 14px;
+}
+
+/* ------------------------------------------------------------- controls -- */
+
+.filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+select,
+button.btn {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--axis);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+select:hover,
+button.btn:hover {
+  background: var(--ghost);
+}
+
+select:focus-visible,
+button.btn:focus-visible,
+.segmented button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--axis);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.segmented button {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 11px;
+  border: 0;
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-left: 1px solid var(--axis);
+}
+
+.segmented button:first-child {
+  border-left: 0;
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------ stat tiles -- */
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.1fr) repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .kpi-row {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+}
+
+.tile {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.tile .tile-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.tile .tile-value {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 4px;
+}
+
+.tile.hero .tile-value {
+  font-size: 48px;
+  line-height: 1.05;
+}
+
+.tile .tile-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.delta {
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.delta.up {
+  color: var(--success-text);
+}
+.delta.down {
+  color: var(--status-critical);
+}
+.delta.flat {
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------- legend -- */
+
+.legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* The glyph is the accessibility channel: status is never hue alone. */
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.legend-glyph {
+  font-size: 11px;
+  font-weight: 700;
+  width: 11px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------------- charts -- */
+
+.chart {
+  width: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.chart text {
+  font-family: inherit;
+}
+
+.axis-label {
+  font-size: 11px;
+  fill: var(--text-muted);
+}
+
+.tick-label {
+  font-size: 11px;
+  fill: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.value-label {
+  font-size: 11px;
+  fill: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.bar-label {
+  font-size: 12px;
+  fill: var(--text-primary);
+}
+
+.gridline {
+  stroke: var(--gridline);
+  stroke-width: 1;
+}
+
+.axis-line {
+  stroke: var(--axis);
+  stroke-width: 1;
+}
+
+.chart-wrap {
+  position: relative;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(11, 11, 11, 0.18);
+  padding: 8px 10px;
+  font-size: 12px;
+  min-width: 150px;
+  max-width: 280px;
+}
+
+.tooltip .tt-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.tooltip .tt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--text-secondary);
+}
+
+.tooltip .tt-row b {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.tooltip .tt-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 5px 0;
+}
+
+/* -------------------------------------------------------------- heatmap -- */
+
+.heatmap {
+  display: grid;
+  gap: 2px; /* the 2px surface gap between adjacent fills */
+  align-items: center;
+  overflow-x: auto;
+}
+
+.heat-row-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding-right: 10px;
+  white-space: nowrap;
+  text-align: right;
+  position: sticky;
+  left: 0;
+  background: var(--surface-1);
+}
+
+.heat-cell {
+  height: 22px;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 0;
+  padding: 0;
+  min-width: 14px;
+}
+
+.heat-cell.empty {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--ghost),
+    var(--ghost) 3px,
+    transparent 3px,
+    transparent 6px
+  );
+}
+
+.heat-scale {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.heat-scale-swatches {
+  display: flex;
+  gap: 2px;
+}
+
+.heat-scale-swatches span {
+  width: 16px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* --------------------------------------------------------------- tables -- */
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+table.data th,
+table.data td {
+  text-align: left;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+table.data th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--axis);
+}
+
+table.data td.num,
+table.data th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+table.data tbody tr:hover {
+  background: var(--ghost);
+}
+
+table.data .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.dim {
+  color: var(--text-muted);
+}
+
+.wrap-anywhere {
+  overflow-wrap: anywhere;
+}
+
+/* Status chip — colour plus glyph plus label, never colour alone. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px 1px 5px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.chip .chip-glyph {
+  font-weight: 700;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  margin: 0 3px 3px 0;
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------- states -- */
+
+.state {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.state h2 {
+  font-size: 15px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.state pre {
+  text-align: left;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 12px;
+  overflow-x: auto;
+  margin: 12px 0 0;
+}
+
+.progress-track {
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 14px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.empty-note {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 18px 0;
+  text-align: center;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media print {
+  .filters,
+  .topbar-actions {
+    display: none;
+  }
+}
