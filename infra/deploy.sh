@@ -18,7 +18,11 @@
 
 set -euo pipefail
 
-BUCKET="${BUCKET:-cargomatic-qa-dashboard}"
+# This default must match the deployed bucket exactly. The distribution is found
+# by its Comment, which is derived from BUCKET below — so a different bucket name
+# finds no distribution and creates a *second* one, on a new CloudFront URL, while
+# the original keeps running and billing. Change it only when moving accounts.
+BUCKET="${BUCKET:-cargomatic-qa-dashboard-164621342586}"
 REGION="${REGION:-us-west-2}"
 RUNS_PREFIX="${RUNS_PREFIX:-runs/}"
 MAX_RUNS_PER_WORKFLOW="${MAX_RUNS_PER_WORKFLOW:-60}"

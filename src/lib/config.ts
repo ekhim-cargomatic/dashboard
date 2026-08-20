@@ -17,6 +17,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   reportBaseUrl: '',
   runsPrefix: 'runs/',
   maxRunsPerWorkflow: 60,
+  clusterRuns: 5,
+  ciRunUrlTemplate: '',
 };
 
 export async function loadConfig(): Promise<AppConfig> {
@@ -31,6 +33,8 @@ export async function loadConfig(): Promise<AppConfig> {
       reportBaseUrl: raw.reportBaseUrl || raw.dataBaseUrl || DEFAULT_CONFIG.reportBaseUrl,
       runsPrefix: raw.runsPrefix ?? DEFAULT_CONFIG.runsPrefix,
       maxRunsPerWorkflow: raw.maxRunsPerWorkflow ?? DEFAULT_CONFIG.maxRunsPerWorkflow,
+      clusterRuns: raw.clusterRuns ?? DEFAULT_CONFIG.clusterRuns,
+      ciRunUrlTemplate: raw.ciRunUrlTemplate ?? DEFAULT_CONFIG.ciRunUrlTemplate,
     };
   } catch {
     // No config.json deployed — same-origin defaults are the right guess.

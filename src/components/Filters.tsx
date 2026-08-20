@@ -37,7 +37,7 @@ const RANGES = [
 
 const GROUP_OPTIONS: { value: GroupBy; label: string; hint: string }[] = [
   { value: 'domain', label: 'Risk domain', hint: 'Business areas from tag_map.yaml' },
-  { value: 'suite', label: 'Feature path', hint: 'Directory the .feature file lives in' },
+  { value: 'suite', label: 'Feature', hint: 'The Feature the scenario belongs to' },
   { value: 'layer', label: 'Layer', hint: 'API / UI / E2E tags' },
 ];
 
@@ -54,6 +54,11 @@ function Select({
   onChange: (next: string) => void;
   allLabel: string;
 }) {
+  // A dropdown whose only choice is "all" is dead UI. Environment and branch come
+  // from an `environment.properties` that CI does not currently write, so they are
+  // usually empty — hide them rather than showing an empty control.
+  if (options.length < 2 && !value) return null;
+
   return (
     <div className="field">
       <label htmlFor={`filter-${label}`}>{label}</label>
@@ -82,11 +87,11 @@ export function Filters({
   return (
     <div className="filters">
       <Select
-        label="Workflow"
+        label="Suite"
         value={filters.workflow}
         options={facets.workflows}
         onChange={(workflow) => onChange({ ...filters, workflow })}
-        allLabel="All workflows"
+        allLabel="All suites"
       />
       <Select
         label="Environment"

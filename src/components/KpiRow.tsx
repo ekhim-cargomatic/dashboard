@@ -130,12 +130,20 @@ export function KpiRow({ latest, delta, trendPoints }: Props) {
         }
       />
 
+      {/*
+        Executed, not total. A tag-filtered behave run reports every scenario in
+        the suite and marks the non-matching ones skipped — a smoke run can show
+        2,111 "tests" of which 14 actually ran. Leading with the total would
+        overstate coverage by two orders of magnitude.
+      */}
       <Tile
-        label="Tests run"
-        value={int(totals.total)}
+        label="Tests executed"
+        value={int(executed)}
         meta={
           <>
-            <span className="dim">{int(totals.skipped)} skipped</span>
+            <span className="dim">
+              of {int(totals.total)} in suite · {int(totals.skipped)} skipped
+            </span>
             {delta.total !== 0 && (
               <>
                 {' · '}

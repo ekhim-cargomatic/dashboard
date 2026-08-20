@@ -7,23 +7,63 @@ Static React SPA on S3 + CloudFront. No server, no database, no index file to
 keep in sync — the dashboard **discovers runs by listing the bucket**, so a run
 appears the moment CI finishes uploading it.
 
+**Live:** https://d34o4mvhjdaxkf.cloudfront.net/
+
 ```
 GitHub Actions (playwright-automation)
-  behave → allure-results → allure generate
-       │
-       ├─ ci/qa-summary.mjs      parses allure-results + tag_map.yaml
-       │                         → qa-summary.json  (compact, ~30 KB)
-       └─ ci/publish-to-s3.sh    aws s3 sync
+  behave → allure-results → allure generate → aws s3 sync --delete
                                        │
                                        ▼
-              s3://bucket/runs/<workflow>/<timestamp>-<run#>/
-                    ├── qa-summary.json
-                    └── allure-report/…          (full Allure HTML)
+        s3://bucket/runs/<suite>/<run_id>/     full Allure report
+                        runs/<suite>/latest/   mirror of the newest run
                                        ▲
                                        │  ListObjectsV2 + GET  (same origin)
                                        │
                               CloudFront ──→ / (the SPA)
 ```
+
+The dashboard reads the **raw Allure report** — CI publishes clean Allure mirrors
+and nothing dashboard-specific. Two small files per run carry everything the
+aggregates need:
+
+| File | What it gives |
+|---|---|
+| `widgets/summary.json` | pass/fail/broken/skipped totals, wall-clock start/stop |
+| `data/suites.json` | every test with status, duration, flaky flag, **and its behave tags** |
+
+That second file carrying `tags` is what makes risk-domain attribution possible
+client-side. Without it the only source would be one `data/test-cases/<uid>.json`
+per test — thousands of requests per run.
+
+---
+
+## Published layout
+
+```
+runs/<suite>/<run_id>/     full Allure report (index.html, data/, widgets/, …)
+runs/<suite>/latest/       mirror of the newest run for that suite
+```
+
+- **`<suite>`** — the suite slug: `smoke`, `regression`, and more as they're added.
+  Always lowercase, no spaces. This is what the dashboard groups trend lines by, so
+  keep it stable: renaming a suite starts a fresh trend line.
+- **`<run_id>`** — the GitHub `github.run_id`. A big integer where larger means
+  newer, **not** a timestamp. The dashboard sorts these **numerically** — sorted as
+  strings, `"9999999"` lands after `"10000000"` and the newest run is wrong. Actual
+  times come from `widgets/summary.json` (`time.start` / `time.stop`, epoch ms).
+- **`latest/`** — a duplicate of a run already listed under its own id. The
+  dashboard **skips it when enumerating**, or the newest run of every suite would
+  be counted twice and all its failures doubled in the area charts. It's still
+  useful as a stable bookmark: `…/runs/smoke/latest/index.html`.
+
+Each folder is a clean mirror (`sync --delete`).
+
+### Optional: `qa-summary.json`
+
+If a `qa-summary.json` sits at a run root, the dashboard reads that instead — one
+request instead of many, and it carries branch/commit/environment that Allure
+doesn't. `ci/qa-summary.mjs` produces it and `ci/publish-to-s3.sh` will include it
+automatically. Entirely optional; raw Allure works fine.
 
 ---
 
@@ -45,86 +85,77 @@ GitHub Actions (playwright-automation)
 Three groupings, switchable in the filter row:
 
 - **Risk domain** — the 26 business areas in `playwright-automation/tag_map.yaml`
-  (invoices, order_billing, unified_view, …), matched from each scenario's behave
-  tags. This is the default and the most useful for "who needs to look at this".
-- **Feature path** — the directory the `.feature` file lives in. Useful when tags
-  are missing or wrong.
+  (invoices, order_billing, unified_view, …), matched from each scenario's tags in
+  `data/suites.json`. The default, and the most useful for "who needs to look".
+- **Feature** — the behave Feature, from `data/behaviors.json`. (Not the file path:
+  allure-behave reliably sets the `feature` label but rarely the
+  parentSuite/suite labels that would give a directory, so `data/suites.json` is
+  usually flat.)
 - **Layer** — `@api` / `@ui` / `@e2e`.
 
 A scenario tagged `@pagination @invoices` matches both the generic `tables` bucket
 and `invoices`. Counting it in both would double-count the totals, so each
-scenario is attributed to one **primary** domain: the least generic match, tie-broken
-by declaration order in `tag_map.yaml`. Generic buckets (`tables`, `admin`,
-`documents`, `exceptions`, `routing`) are ranked as generic in
-`scripts/gen-domains.mjs` and only win when nothing specific matched. Scenarios
-matching no domain land in `unmapped` — a large `unmapped` bucket means tags need
-attention.
+scenario is attributed to one **primary** domain: the least generic match,
+tie-broken by declaration order in `tag_map.yaml`. Generic buckets (`tables`,
+`admin`, `documents`, `exceptions`, `routing`) only win when nothing specific
+matched. Scenarios matching no domain land in `unmapped` — a large `unmapped`
+bucket means tags need attention.
+
+### Reading "Tests executed"
+
+A tag-filtered behave run emits **every** scenario in the suite and marks the ones
+that didn't match as `skipped`. A real smoke run here shows 2,111 scenarios of
+which 14 executed. So the KPI leads with **executed** (`total − skipped`), and pass
+rate is `passed / executed`. Leading with the total would overstate coverage by two
+orders of magnitude.
+
+### Environment and branch filters
+
+These come from Allure's `widgets/environment.json`, populated only if CI writes an
+`environment.properties` into `allure-results`. It currently doesn't, so those
+filters are **hidden** rather than shown empty. To light them up, add to the
+`allure-results` directory before `allure generate`:
+
+```
+env=staging
+branch=main
+commit=abc1234
+```
 
 ---
 
-## Setup
-
-### 1. Provision AWS and deploy the SPA
+## Deploying
 
 ```bash
 npm install
-BUCKET=cargomatic-qa-dashboard REGION=us-west-2 ./infra/deploy.sh
+./infra/deploy.sh --app-only     # rebuild + push the SPA (typical)
+./infra/deploy.sh                # full pass; also reconciles bucket/CDN config
 ```
 
-Idempotent. It creates the bucket, applies the public read + list policy, a CORS
-rule, a 90-day lifecycle rule, publishes the CloudFront function, creates the
-distribution, then builds and uploads the SPA. It prints the CloudFront URL.
+Both reuse the existing distribution, so **the URL never changes**. `BUCKET`
+defaults to the deployed bucket — overriding it creates a *second* stack on a new
+URL, so leave it alone unless you're moving accounts.
 
-Re-deploy the SPA alone (no provisioning):
+Provisioning (first run, already done) creates the bucket with a public read +
+`s3:ListBucket` policy scoped to `runs/`, a CORS rule, a 90-day lifecycle rule, the
+CloudFront function, and a custom cache policy.
 
-```bash
-./infra/deploy.sh --app-only
-```
+> **Access:** the bucket is public. Anyone with the URL can read every result,
+> failure message and screenshot. To lock it down, put CloudFront in front of a
+> private bucket with OAC and add an auth check — the SPA needs no changes, since
+> it only ever does same-origin GETs.
 
-> **Access:** the bucket is public, as specified. Anyone with the URL can read
-> every result, failure message and screenshot. If that stops being acceptable,
-> the change is to put CloudFront in front of a private bucket with OAC and add
-> an auth check — the SPA needs no changes, since it only ever does same-origin GETs.
-
-### 2. Wire up CI
-
-Copy the steps from [`ci/github-workflow-snippet.yml`](ci/github-workflow-snippet.yml)
-into the `merge-report` job of each workflow that should feed the dashboard,
-right after "Generate Allure Report".
-
-Create an IAM role for CI to assume via OIDC using
-[`ci/iam-policy.json`](ci/iam-policy.json) (write-only under `runs/` — CI cannot
-delete history or overwrite the deployed SPA), then set:
-
-| Kind | Name | Example |
-|---|---|---|
-| variable | `QA_DASHBOARD_BUCKET` | `cargomatic-qa-dashboard` |
-| variable | `AWS_REGION` | `us-west-2` |
-| secret | `AWS_ROLE_ARN` | `arn:aws:iam::…:role/qa-dashboard-publisher` |
-
-Publishing manually, from the automation repo:
-
-```bash
-QA_DASHBOARD_BUCKET=cargomatic-qa-dashboard \
-  bash ../qa-dashboard/ci/publish-to-s3.sh \
-    --results reports/allure-results \
-    --report  reports/allure-report
-```
-
-`WORKFLOW_NAME` decides which workflow bucket a run lands in and therefore which
-trend line it joins — keep it stable; renaming a workflow starts a fresh line.
-
-### 3. Keep the domain map in sync
+### Keeping the domain map in sync
 
 `tag_map.yaml` is the source of truth for risk domains. After changing it:
 
 ```bash
 npm run gen:domains -- --tag-map ../playwright-automation/tag_map.yaml
+./infra/deploy.sh --app-only
 ```
 
 That regenerates `src/lib/domains.generated.ts` (the SPA) and
-`ci/domains.generated.json` (the summariser). Both are committed so CI needs no
-YAML parser. Redeploy the SPA to pick up the change.
+`ci/domains.generated.json` (the optional CI summariser). Both are committed.
 
 ---
 
@@ -132,98 +163,103 @@ YAML parser. Redeploy the SPA to pick up the change.
 
 ```bash
 npm install
-npm run fixtures   # 120 realistic runs across 3 workflows into public/runs/
+npm run fixtures   # 120 Allure-shaped runs across 3 suites into public/runs/
 npm run dev        # http://localhost:5173
 ```
 
-The fixtures contain the shapes the dashboard exists to surface: a sustained
-regression in `order_billing` starting partway through the window, one bad night
-that recovers, a genuinely flaky test, and a targeted workflow that only covers a
-few domains (so the heatmap's "not run" hatching is exercised). They are
-deterministic, so screenshots stay stable.
-
-Against a real bucket instead:
-
-```bash
-VITE_S3_ORIGIN=https://cargomatic-qa-dashboard.s3.us-west-2.amazonaws.com npm run dev
-```
+The fixtures are *real Allure file shapes*, so `npm run dev` exercises the same
+parsing path production uses. They deliberately contain the cases that break naive
+implementations: a sustained regression, one bad night that recovers, a flaky test,
+a suite covering only some domains, run ids that straddle a digit-count boundary
+(so numeric sorting is actually proven), and a `latest/` mirror that must be
+skipped.
 
 | Command | |
 |---|---|
 | `npm run dev` | dev server |
 | `npm run build` | typecheck + production build |
-| `npm run typecheck` | types only |
 | `npm run fixtures` | regenerate local fixture runs |
 | `npm run gen:domains` | recompile the tag → domain map |
-| `npm run summary` | run the summariser directly |
+
+Against the real bucket instead:
+
+```bash
+VITE_S3_ORIGIN=https://cargomatic-qa-dashboard-164621342586.s3.us-west-2.amazonaws.com npm run dev
+```
 
 ---
 
 ## How discovery works
 
 The SPA calls S3's ListObjectsV2 REST API directly — the same call the AWS CLI
-makes — served through the same CloudFront distribution, so it is same-origin and
-CORS never enters the picture.
+makes — through the same CloudFront distribution, so it's same-origin and CORS
+never enters the picture.
 
-Two things keep it cheap enough to do from a browser:
+`delimiter=/` makes S3 return *folders*, not objects: listing `runs/` returns the
+suites, and `runs/smoke/` returns one entry per run rather than the ~5,000 files
+inside each report. Runs are capped per suite (`maxRunsPerWorkflow`, default 60) so
+a noisy hourly job can't push a weekly regression off the dashboard.
 
-1. `delimiter=/` makes S3 return *folders*, not objects. Listing `runs/` returns
-   ~10 workflows; listing `runs/smoke-tests/` returns one entry per run, not the
-   thousands of files inside each Allure report.
-2. Run keys begin with a UTC timestamp, so lexical-descending order is
-   newest-first. The newest 60 per workflow (`maxRunsPerWorkflow`) are fetched
-   without reading any of the others.
+Loading is two-phase, because failure *messages* live in one file per test:
 
-Summaries are immutable once written, so they are cached in `sessionStorage`;
-only the newest run costs a request on a repeat visit.
+1. **Aggregates** — `widgets/summary.json` + `data/suites.json` per run. Two
+   requests each; this is what the trend, area and heatmap charts need.
+2. **Failure messages** — `data/test-cases/<uid>.json`, fetched only for the most
+   recent `clusterRuns` runs (default 5). The clustering card fills in when they
+   land; the rest of the page is already interactive.
+
+Run data is immutable once written, so it's cached in `sessionStorage`.
 
 **The one CloudFront gotcha:** do *not* set a Default Root Object. It makes
 CloudFront answer `/?list-type=2&…` with `index.html` before the origin sees the
-query string, and discovery silently returns the SPA's own HTML. That is why
-[`infra/cloudfront-function.js`](infra/cloudfront-function.js) exists — it appends
-`index.html` for navigations only and passes `list-type` requests straight
-through. The SPA detects this specific misconfiguration and says so rather than
-showing an empty dashboard.
+query string, and discovery silently returns the SPA's own HTML.
+[`infra/cloudfront-function.js`](infra/cloudfront-function.js) appends `index.html`
+for navigations only and passes `list-type` requests straight through. The cache
+policy must also key on the full query string, or every listing collapses onto one
+cache entry and returns the wrong runs. The SPA detects this specific
+misconfiguration and says so rather than showing an empty dashboard.
 
 If listing is unavailable, the SPA falls back to an optional `runs/index.json`
-(a plain array of run prefixes). That is also how the local fixtures load.
+(a plain array of run prefixes). That's also how the local fixtures load.
 
 ### Runtime config
 
-`/config.json` is read at startup so the bucket, prefix and run cap can change
-without rebuilding:
+`/config.json` is read at startup so these can change without rebuilding:
 
 ```json
 {
   "dataBaseUrl": "",
   "reportBaseUrl": "",
   "runsPrefix": "runs/",
-  "maxRunsPerWorkflow": 60
+  "maxRunsPerWorkflow": 60,
+  "clusterRuns": 5,
+  "ciRunUrlTemplate": ""
 }
 ```
 
-Empty origins mean "same origin". Set `dataBaseUrl` only if the data lives
-somewhere other than where the SPA is served from.
+Empty origins mean "same origin". Set `ciRunUrlTemplate` to
+`https://github.com/<org>/playwright-automation/actions/runs/{runId}` to make each
+run link back to its CI job.
 
 ---
 
 ## Colour
 
-The charts follow one rule: **hue never carries meaning by itself.**
+One rule: **hue never carries meaning by itself.**
 
 - **Magnitude** (area bars, heatmap cells) uses a single-hue sequential blue ramp,
-  `--ramp-0` … `--ramp-8`. One hue is immune to colour-vision deficiency, and
-  these are quantities to rank rather than identities to tell apart. Dark mode
-  gets its own *selected* steps with the direction reversed, so "further from the
-  surface means more" holds in both themes. Every bar is directly labelled, which
-  is also the required relief for ramp steps below 3:1 against the surface.
+  `--ramp-0` … `--ramp-8`. One hue is immune to colour-vision deficiency, and these
+  are quantities to rank rather than identities to tell apart. Dark mode gets its
+  own *selected* steps with the direction reversed, so "further from the surface
+  means more" holds in both themes. Every bar is directly labelled, which is also
+  the required relief for ramp steps below 3:1 against the surface.
 - **Status** (passed/failed/broken/skipped) uses the reserved status palette.
   Green↔red measures ΔE ~4 under deuteranopia, so it is *always* paired with a
-  glyph (`✓ ✕ ! –`) and a word, in the legend and in every chip. The stacked bars
-  additionally seat neutral grey between green and orange — the worst adjacent
-  pair in the set — and keep a 2px surface gap between segments.
-- **No categorical palette is used anywhere.** 26 domains would need 26 hues; they
-  get a ramp and a sorted table instead.
+  glyph (`✓ ✕ ! –`) and a word. The stacked bars additionally seat neutral grey
+  between green and orange — the worst adjacent pair — and keep a 2px surface gap
+  between segments.
+- **No categorical palette anywhere.** 26 domains would need 26 hues; they get a
+  ramp and a sorted table instead.
 
 Every chart has a hover layer, and every chart's numbers also exist in a table.
 
@@ -234,35 +270,33 @@ Every chart has a hover layer, and every chart's numbers also exist in a table.
 ```
 src/
   App.tsx                  page composition and state
-  types.ts                 the qa-summary.json contract, shared with CI
+  types.ts                 the RunSummary contract
   lib/
-    s3.ts                  bucket listing, run fetching, caching
+    s3.ts                  bucket listing, run discovery, caching
+    allure.ts              raw Allure report → RunSummary
+    domains.ts             tag → risk-domain resolution
     aggregate.ts           cross-run analysis: trends, impact, heatmap, flakiness
     status.ts              status palette + the magnitude ramp
     domains.generated.ts   AUTO-GENERATED from tag_map.yaml
   components/              charts and tables
 ci/
-  qa-summary.mjs           allure-results → qa-summary.json (zero dependencies)
-  publish-to-s3.sh         summarise + upload one run
+  publish-to-s3.sh         manual publish / backfill, same layout as CI
+  qa-summary.mjs           optional precomputed summary (zero dependencies)
   domains.generated.json   AUTO-GENERATED from tag_map.yaml
-  github-workflow-snippet.yml
-  iam-policy.json
+  iam-policy.json          least-privilege policy for the CI role
 infra/
   deploy.sh                provision + deploy
-  cloudfront-function.js   routing (with the listing carve-out)
+  cloudfront-function.js   routing, with the listing carve-out
 scripts/
   gen-domains.mjs          tag_map.yaml → the two generated files
-  make-fixtures.mjs        deterministic local fixture runs
+  make-fixtures.mjs        deterministic Allure-shaped fixture runs
 ```
 
 ---
 
 ## Cost
 
-Storage dominates, and it is all Allure HTML. A 381-scenario regression report
-with screenshots runs roughly 50–200 MB; the `qa-summary.json` beside it is ~30 KB.
-At ~3 runs/day the 90-day lifecycle rule in `deploy.sh` holds a few hundred GB —
-tens of dollars a month in S3, and very little in CloudFront at internal traffic
-levels. To cut it, lower the lifecycle window; the trend charts only need the
-summaries, so an alternative is a second rule expiring `allure-report/` sooner
-than the summaries beside it.
+Storage dominates and it's all Allure HTML — a full report with attachments runs
+50–200 MB. The 90-day lifecycle rule in `deploy.sh` bounds it. To cut further,
+lower that window, or expire the heavy `data/attachments/` sooner than the small
+`widgets/` and `data/suites.json` the trends actually need.

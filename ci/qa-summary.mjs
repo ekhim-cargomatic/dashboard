@@ -417,7 +417,7 @@ const document = {
   trigger: args.trigger || envDefault('GITHUB_EVENT_NAME'),
   actor: args.actor || envDefault('GITHUB_ACTOR'),
   generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
-  reportPath: 'allure-report/index.html',
+  reportPath: 'index.html',
   ...summary,
 };
 

@@ -111,6 +111,20 @@ export interface AppConfig {
   reportBaseUrl: string;
   /** Root prefix runs are published under. */
   runsPrefix: string;
-  /** Most recent runs to load per workflow. Keeps a 500-run bucket responsive. */
+  /** Most recent runs to load per suite. Keeps a 500-run bucket responsive. */
   maxRunsPerWorkflow: number;
+  /**
+   * How many recent runs get their failure messages fetched.
+   *
+   * Messages live in one file per test, so this is the expensive part of loading
+   * a raw Allure report. Clustering across a few recent runs is worth the cost;
+   * across sixty is not.
+   */
+  clusterRuns: number;
+  /**
+   * Link template for a CI run, with `{runId}` substituted — e.g.
+   * `https://github.com/cargomatic/playwright-automation/actions/runs/{runId}`.
+   * Empty disables the CI link.
+   */
+  ciRunUrlTemplate: string;
 }

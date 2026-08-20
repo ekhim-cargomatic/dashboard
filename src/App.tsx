@@ -13,6 +13,7 @@ import {
 } from './lib/aggregate';
 import { loadConfig } from './lib/config';
 import { discoverRuns, fetchRunSummaries } from './lib/s3';
+import { enrichWithFailureDetail } from './lib/allure';
 import { int, relativeTime } from './lib/format';
 import { AreaHeatmap } from './components/AreaHeatmap';
 import { AreaImpactChart, type ImpactMetric } from './components/AreaImpactChart';
@@ -27,7 +28,7 @@ type Theme = 'light' | 'dark' | 'system';
 
 const GROUP_LABELS: Record<GroupBy, string> = {
   domain: 'Risk domain',
-  suite: 'Feature path',
+  suite: 'Feature',
   layer: 'Layer',
 };
 
@@ -63,8 +64,8 @@ export default function App() {
   const refresh = useCallback(async (activeConfig: AppConfig) => {
     setLoad({ status: 'loading', loaded: 0, total: 0 });
     try {
-      const { prefixes, method } = await discoverRuns(activeConfig);
-      if (prefixes.length === 0) {
+      const { refs, method } = await discoverRuns(activeConfig);
+      if (refs.length === 0) {
         setRuns([]);
         setLoad({
           status: 'ready',
@@ -76,12 +77,23 @@ export default function App() {
         return;
       }
 
-      setLoad({ status: 'loading', loaded: 0, total: prefixes.length, method });
-      const summaries = await fetchRunSummaries(activeConfig, prefixes, (loaded, total) =>
+      setLoad({ status: 'loading', loaded: 0, total: refs.length, method });
+      const summaries = await fetchRunSummaries(activeConfig, refs, (loaded, total) =>
         setLoad((prev) => ({ ...prev, loaded, total })),
       );
+
+      // Show the dashboard as soon as the aggregates are in. Failure *messages*
+      // cost one request per failing test, so they load afterwards for a few
+      // recent runs only and the clustering card fills in when they arrive.
       setRuns(summaries);
-      setLoad({ status: 'ready', loaded: summaries.length, total: prefixes.length, method });
+      setLoad({ status: 'ready', loaded: summaries.length, total: refs.length, method });
+
+      const recent = summaries.slice(0, activeConfig.clusterRuns);
+      if (recent.length > 0) {
+        await Promise.all(recent.map((run) => enrichWithFailureDetail(activeConfig, run)));
+        // New array identity so the memoised aggregates recompute.
+        setRuns((previous) => [...previous]);
+      }
     } catch (error) {
       setLoad({
         status: 'error',
@@ -202,9 +214,11 @@ export default function App() {
           </p>
           <pre>
 {`Expected layout
-  ${config?.runsPrefix ?? 'runs/'}<workflow>/<timestamp>-<run number>/
-      qa-summary.json
-      allure-report/index.html`}
+  ${config?.runsPrefix ?? 'runs/'}<suite>/<run_id>/
+      index.html          the generated Allure report
+      widgets/summary.json
+      data/suites.json
+  ${config?.runsPrefix ?? 'runs/'}<suite>/latest/    mirror of the newest run (skipped when listing)`}
           </pre>
         </div>
       </div>

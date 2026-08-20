@@ -2,31 +2,42 @@
 /**
  * Generate realistic fixture runs into `public/runs/` for local development.
  *
- * `npm run dev` then serves them through the same code path production uses:
- * bucket listing is unavailable against Vite's static server, so the SPA falls
- * back to `runs/index.json`, which this script also writes.
+ * These are *Allure-shaped* — the same files CI publishes — so `npm run dev`
+ * exercises the real parsing path in lib/allure.ts rather than a convenient
+ * stand-in:
  *
- * The data is deliberately not uniform noise — it contains the shapes the
- * dashboard exists to surface:
+ *   runs/<suite>/<run_id>/widgets/summary.json
+ *                        /widgets/severity.json
+ *                        /data/suites.json          (tests + tags)
+ *                        /data/behaviors.json       (feature grouping)
+ *                        /data/test-cases/<uid>.json (failure messages)
+ *   runs/<suite>/latest/  mirror of the newest run
+ *
+ * The data deliberately contains the shapes the dashboard exists to surface:
  *   - a sustained regression in one domain starting partway through the window
  *   - a genuinely flaky test that flips most runs
- *   - one bad night that recovers, so "regression vs flake" has something to separate
- *   - a targeted workflow that only covers a few domains, exercising the
- *     heatmap's "not run" hatching
+ *   - one bad night that recovers
+ *   - a suite that only covers a few domains (exercises "not run" hatching)
+ *   - run ids that straddle a digit-count boundary, so lexical sorting would
+ *     visibly mis-order them and numeric sorting is actually proven
+ *   - a `latest/` mirror, which must be skipped rather than double-counted
  *
  * Deterministic: same output every run, so screenshots and diffs stay stable.
  */
 
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
-const OUT = join(ROOT, 'public', 'runs');
+const PUBLIC = join(ROOT, 'public');
+const OUT = join(PUBLIC, 'runs');
 
 const domainMap = JSON.parse(readFileSync(join(ROOT, 'ci', 'domains.generated.json'), 'utf8'));
 const ALL_DOMAINS = domainMap.domains.map((d) => d.slug);
+/** domain slug -> a representative tag, so fixtures carry tags the map resolves. */
+const TAG_FOR = Object.fromEntries(domainMap.domains.map((d) => [d.slug, d.tags[0] ?? d.slug]));
 
 /** Deterministic PRNG (mulberry32) — Math.random would break reproducibility. */
 function rng(seed) {
@@ -40,25 +51,25 @@ function rng(seed) {
   };
 }
 
-const SUITES = {
-  invoices: 'admin/invoices',
-  payouts: 'admin/payouts',
-  order_billing: 'admin/order_billing',
-  order_booking: 'admin/order_details',
-  booking: 'admin/booking',
-  shipments: 'admin/shipments',
-  drayage: 'api/unified_view',
-  unified_view: 'admin/unifiedview/drayage',
-  tariffs: 'admin/tariffs',
-  quotes: 'api/quotes',
-  accessorials: 'admin/accessorials',
-  shipper: 'ui/shipper',
-  carrier: 'ui/carrier',
-  auth: 'admin/admin_login',
-  markets: 'admin/markets',
-  amazon: 'api/amazon',
+const FEATURE_FOR = {
+  invoices: 'Invoice details',
+  payouts: 'AP payouts',
+  order_billing: 'Order billing status',
+  order_booking: 'Order details',
+  booking: 'Command booking flow',
+  shipments: 'Shipment details',
+  drayage: 'Drayage orders',
+  unified_view: 'UV Explore',
+  tariffs: 'Tariff management',
+  quotes: 'Quotes API',
+  accessorials: 'Accessorial management',
+  shipper: 'Shipper profile',
+  carrier: 'Carrier profile',
+  auth: 'Login',
+  markets: 'Markets',
+  amazon: 'Amazon EDI',
 };
-const suiteFor = (domain) => SUITES[domain] ?? `admin/${domain}`;
+const featureFor = (domain) => FEATURE_FOR[domain] ?? `${domain} feature`;
 
 const ERRORS = [
   'TimeoutError: locator.click: Timeout 30000ms exceeded waiting for selector "[data-test=save-btn]"',
@@ -69,76 +80,52 @@ const ERRORS = [
   'AssertionError: expected total weight 42150 but was 41980',
 ];
 
-const WORKFLOWS = [
-  { name: 'Smoke Tests', slug: 'smoke-tests', size: 96, perDay: 2, envs: ['staging'], domains: ALL_DOMAINS },
-  { name: 'Regression', slug: 'regression', size: 381, perDay: 1, envs: ['staging'], domains: ALL_DOMAINS },
-  {
-    name: 'Targeted',
-    slug: 'targeted',
-    size: 44,
-    perDay: 1,
-    envs: ['staging', 'dev'],
-    // Only touches a few areas — this is what puts "not run" cells in the heatmap.
-    domains: ['order_billing', 'invoices', 'payouts', 'tariffs'],
-  },
+const SEVERITIES = ['critical', 'normal', 'normal', 'minor'];
+
+const SUITES = [
+  { slug: 'smoke', size: 96, perDay: 2, domains: ALL_DOMAINS },
+  { slug: 'regression', size: 381, perDay: 1, domains: ALL_DOMAINS },
+  // Only touches a few areas — this is what puts "not run" cells in the heatmap.
+  { slug: 'booking', size: 44, perDay: 1, domains: ['order_billing', 'invoices', 'payouts', 'tariffs'] },
 ];
 
 const DAYS = 30;
-const NOW = Date.UTC(2026, 7, 18, 14, 0, 0); // fixed clock keeps output stable
+const NOW = Date.UTC(2026, 7, 20, 14, 0, 0); // fixed clock keeps output stable
 const DAY_MS = 86_400_000;
 
-/** Baseline flakiness per domain, so some areas are chronically noisier. */
-const baseFailRate = (domain, random) => 0.005 + random() * 0.02 + (domain === 'unified_view' ? 0.02 : 0);
-
 /**
- * Relative test counts. Real suites are lumpy — unified_view and order_billing
- * carry far more scenarios than fsc or routing. The unevenness is the point: it
- * makes "by volume" and "by fail rate" rank areas differently, which is exactly
- * the disagreement the two-metric toggle exists to expose.
+ * Base run id chosen so the sequence crosses from 10 to 11 digits partway
+ * through. Sorted as strings these interleave wrongly; the dashboard must sort
+ * them numerically.
  */
+const RUN_ID_BASE = 9_999_999_960;
+
 const WEIGHTS = {
-  unified_view: 5,
-  order_billing: 4.5,
-  shipments: 3.5,
-  order_booking: 3,
-  invoices: 3,
-  booking: 2.5,
-  accessorials: 2,
-  drayage: 2,
-  payouts: 2,
-  tariffs: 1.5,
-  shipment_leg_management: 1.5,
-  carrier: 1.5,
-  shipper: 1.5,
-  quotes: 1,
-  auth: 0.6,
-  fsc: 0.4,
-  routing: 0.4,
-  exceptions: 0.4,
+  unified_view: 5, order_billing: 4.5, shipments: 3.5, order_booking: 3, invoices: 3,
+  booking: 2.5, accessorials: 2, drayage: 2, payouts: 2, tariffs: 1.5,
+  shipment_leg_management: 1.5, carrier: 1.5, shipper: 1.5, quotes: 1,
+  auth: 0.6, fsc: 0.4, routing: 0.4, exceptions: 0.4,
 };
 const weightOf = (domain) => WEIGHTS[domain] ?? 1;
+const baseFailRate = (domain, random) =>
+  0.005 + random() * 0.02 + (domain === 'unified_view' ? 0.02 : 0);
 
-function buildRun(workflow, dayIndex, runOfDay, random) {
+let uidCounter = 0;
+const nextUid = () => (uidCounter++).toString(16).padStart(16, '0');
+
+function buildRun(suite, dayIndex, runOfDay, runId, random) {
   const finishedAt = NOW - (DAYS - dayIndex) * DAY_MS + runOfDay * 6 * 3600_000;
-  const runNumber = dayIndex * workflow.perDay + runOfDay + 100;
-  const stamp = new Date(finishedAt).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-  const runKey = `${stamp}-${runNumber}`;
-  const prefix = `runs/${workflow.slug}/${runKey}`;
 
-  // The injected narrative.
-  const regressionActive = dayIndex >= 18 && workflow.domains.includes('order_billing');
+  const regressionActive = dayIndex >= 18 && suite.domains.includes('order_billing');
   const badNight = dayIndex === 11;
 
-  const perDomain = [];
-  const failures = [];
-  const clusterCounts = new Map();
+  const domains = suite.domains;
+  const totalWeight = domains.reduce((sum, d) => sum + weightOf(d), 0);
+  const sizeOf = (domain) => Math.max(2, Math.round((weightOf(domain) / totalWeight) * suite.size));
 
-  const domains = workflow.domains;
-  const totalWeight = domains.reduce((sum, domain) => sum + weightOf(domain), 0);
-  const sizeOf = (domain) =>
-    Math.max(2, Math.round((weightOf(domain) / totalWeight) * workflow.size));
-
-  let totals = { total: 0, passed: 0, failed: 0, broken: 0, skipped: 0, unknown: 0, durationMs: 0 };
+  const tests = [];
+  const statistic = { failed: 0, broken: 0, skipped: 0, passed: 0, unknown: 0, total: 0 };
+  let cursor = finishedAt - 20 * 60_000;
 
   for (const domain of domains) {
     const total = sizeOf(domain) + Math.floor(random() * 3);
@@ -149,221 +136,212 @@ function buildRun(workflow, dayIndex, runOfDay, random) {
     if (regressionActive && domain === 'order_billing') rate = 0.42 + random() * 0.12;
     if (badNight) rate += 0.18;
 
-    let impacted = Math.min(executed, Math.round(executed * rate + (random() < 0.3 ? 1 : 0)));
-    if (impacted < 0) impacted = 0;
-
+    const impacted = Math.max(
+      0,
+      Math.min(executed, Math.round(executed * rate + (random() < 0.3 ? 1 : 0))),
+    );
     const broken = Math.floor(impacted * (random() < 0.4 ? 0.4 : 0.15));
     const failed = impacted - broken;
-    const passed = executed - impacted;
-    const durationMs = executed * (4000 + Math.floor(random() * 9000));
 
-    totals.total += total;
-    totals.passed += passed;
-    totals.failed += failed;
-    totals.broken += broken;
-    totals.skipped += skipped;
-    totals.durationMs += durationMs;
+    for (let i = 0; i < total; i += 1) {
+      let status = 'passed';
+      if (i < skipped) status = 'skipped';
+      else if (i < skipped + broken) status = 'broken';
+      else if (i < skipped + broken + failed) status = 'failed';
 
-    perDomain.push({
-      domain,
-      total,
-      durationMs,
-      passed,
-      failed,
-      broken,
-      skipped,
-      unknown: 0,
-      impacted,
-      failRate: executed ? Number((impacted / executed).toFixed(4)) : 0,
-    });
+      // One designated flaky test flips with the run id's parity.
+      const isFlakyCandidate = domain === 'unified_view' && i === skipped;
+      if (isFlakyCandidate && Number(runId) % 2 === 0 && status !== 'passed') status = 'passed';
 
-    for (let i = 0; i < impacted; i += 1) {
-      const status = i < broken ? 'broken' : 'failed';
+      const duration = status === 'skipped' ? 0 : 2000 + Math.floor(random() * 22000);
+      const start = cursor;
+      cursor += Math.floor(duration / 8);
+
+      statistic[status] += 1;
+      statistic.total += 1;
+
+      const failing = status === 'failed' || status === 'broken';
       const errorIndex =
         regressionActive && domain === 'order_billing' ? 1 : Math.floor(random() * ERRORS.length);
-      const message = ERRORS[errorIndex];
-      const fingerprint = message.replace(/\b\d+\b/g, '<n>').replace(/"[^"]*"/g, '<literal>').slice(0, 160);
 
-      // One designated flaky test flips based on the run number's parity.
-      const isFlakyCandidate = domain === 'unified_view' && i === 0;
-      if (isFlakyCandidate && runNumber % 2 === 0) continue;
-
-      const name = isFlakyCandidate
-        ? 'UV Explore: column totals match the summary row'
-        : `${domain} scenario ${i + 1}`;
-
-      failures.push({
-        name,
-        fullName: `${domain}: ${name}`,
-        feature: domain,
-        suite: suiteFor(domain),
-        domain,
-        domains: [domain],
+      tests.push({
+        uid: nextUid(),
+        name: isFlakyCandidate
+          ? 'UV Explore: column totals match the summary row'
+          : `${featureFor(domain)}: scenario ${i + 1}`,
+        feature: featureFor(domain),
         status,
-        severity: random() < 0.2 ? 'critical' : random() < 0.5 ? 'normal' : 'minor',
-        message,
-        fingerprint,
-        durationMs: 3000 + Math.floor(random() * 20000),
-        historyId: isFlakyCandidate ? 'flaky-uv-columns' : `${domain}-${i}`,
-        uuid: `${runKey}-${domain}-${i}`,
+        time: { start, stop: start + duration, duration },
         flaky: isFlakyCandidate,
+        retriesCount: isFlakyCandidate ? 1 : 0,
+        retriesStatusChange: isFlakyCandidate,
+        // Tags the domain map actually resolves, plus a layer tag.
+        tags: [TAG_FOR[domain], domain === 'quotes' || domain === 'amazon' ? 'api' : 'ui'].filter(
+          Boolean,
+        ),
+        severity: SEVERITIES[Math.floor(random() * SEVERITIES.length)],
+        message: failing ? ERRORS[errorIndex] : '',
       });
-
-      const cluster = clusterCounts.get(fingerprint) ?? {
-        fingerprint,
-        count: 0,
-        example: message,
-        domains: [],
-        suites: [],
-        tests: [],
-      };
-      cluster.count += 1;
-      if (!cluster.domains.includes(domain)) cluster.domains.push(domain);
-      if (!cluster.suites.includes(suiteFor(domain))) cluster.suites.push(suiteFor(domain));
-      if (cluster.tests.length < 10) cluster.tests.push(name);
-      clusterCounts.set(fingerprint, cluster);
     }
   }
 
-  const impacted = totals.failed + totals.broken;
-  const executed = totals.total - totals.skipped;
+  return { tests, statistic, finishedAt, startedAt: finishedAt - 20 * 60_000 };
+}
 
-  const bySuite = new Map();
-  for (const row of perDomain) {
-    const suite = suiteFor(row.domain);
-    const entry = bySuite.get(suite) ?? {
-      suite,
-      total: 0,
-      durationMs: 0,
-      passed: 0,
-      failed: 0,
-      broken: 0,
-      skipped: 0,
-      unknown: 0,
-      impacted: 0,
-      failRate: 0,
-    };
-    for (const key of ['total', 'durationMs', 'passed', 'failed', 'broken', 'skipped', 'impacted']) {
-      entry[key] += row[key];
-    }
-    bySuite.set(suite, entry);
+function writeReport(dir, run, suite, runId) {
+  mkdirSync(join(dir, 'widgets'), { recursive: true });
+  mkdirSync(join(dir, 'data', 'test-cases'), { recursive: true });
+
+  const leaf = (t) => ({
+    name: t.name,
+    uid: t.uid,
+    parentUid: 'fixture',
+    status: t.status,
+    time: t.time,
+    flaky: t.flaky,
+    newFailed: false,
+    newPassed: false,
+    newBroken: false,
+    retriesCount: t.retriesCount,
+    retriesStatusChange: t.retriesStatusChange,
+    parameters: [],
+    tags: t.tags,
+  });
+
+  writeFileSync(
+    join(dir, 'widgets', 'summary.json'),
+    JSON.stringify({
+      reportName: 'Allure Report',
+      testRuns: [],
+      statistic: run.statistic,
+      time: {
+        start: run.startedAt,
+        stop: run.finishedAt,
+        duration: run.finishedAt - run.startedAt,
+      },
+    }),
+  );
+
+  // Flat under the synthetic root, which is what allure-behave actually produces
+  // when scenarios carry no parentSuite/suite labels.
+  writeFileSync(
+    join(dir, 'data', 'suites.json'),
+    JSON.stringify({ name: 'suites', uid: 'suites', children: run.tests.map(leaf) }),
+  );
+
+  const byFeature = new Map();
+  for (const t of run.tests) {
+    if (!byFeature.has(t.feature)) byFeature.set(t.feature, []);
+    byFeature.get(t.feature).push(t);
   }
-  for (const entry of bySuite.values()) {
-    const ex = entry.total - entry.skipped;
-    entry.failRate = ex ? Number((entry.impacted / ex).toFixed(4)) : 0;
+  writeFileSync(
+    join(dir, 'data', 'behaviors.json'),
+    JSON.stringify({
+      name: 'behaviors',
+      uid: 'behaviors',
+      children: [...byFeature.entries()].map(([name, items], i) => ({
+        name,
+        uid: `feature-${i}`,
+        children: items.map(leaf),
+      })),
+    }),
+  );
+
+  writeFileSync(
+    join(dir, 'widgets', 'severity.json'),
+    JSON.stringify(
+      run.tests.map((t) => ({
+        uid: t.uid,
+        name: t.name,
+        time: t.time,
+        status: t.status,
+        severity: t.severity,
+      })),
+    ),
+  );
+
+  writeFileSync(join(dir, 'widgets', 'environment.json'), JSON.stringify([]));
+
+  for (const t of run.tests) {
+    if (t.status !== 'failed' && t.status !== 'broken') continue;
+    writeFileSync(
+      join(dir, 'data', 'test-cases', `${t.uid}.json`),
+      JSON.stringify({
+        uid: t.uid,
+        name: t.name,
+        fullName: `${t.feature}: ${t.name}`,
+        historyId: t.name,
+        status: t.status,
+        statusMessage: t.message,
+        statusTrace: 'Traceback (most recent call last):\n  ...',
+      }),
+    );
   }
 
-  const layerRow = (layer, share) => {
-    const total = Math.round(totals.total * share);
-    const imp = Math.round(impacted * share);
-    return {
-      layer,
-      total,
-      durationMs: Math.round(totals.durationMs * share),
-      passed: total - imp,
-      failed: imp,
-      broken: 0,
-      skipped: 0,
-      unknown: 0,
-      impacted: imp,
-      failRate: total ? Number((imp / total).toFixed(4)) : 0,
-    };
-  };
-
-  const severityRow = (severity, share) => {
-    const total = Math.round(totals.total * share);
-    const imp = Math.round(impacted * share);
-    return {
-      severity,
-      total,
-      durationMs: 0,
-      passed: total - imp,
-      failed: imp,
-      broken: 0,
-      skipped: 0,
-      unknown: 0,
-      impacted: imp,
-      failRate: total ? Number((imp / total).toFixed(4)) : 0,
-    };
-  };
-
-  const wallClockMs = Math.round(totals.durationMs / 3); // three shards in parallel
-
-  return {
-    schemaVersion: 1,
-    runKey,
-    prefix,
-    workflow: workflow.name,
-    workflowSlug: workflow.slug,
-    runNumber,
-    ciRunId: String(9_000_000 + runNumber),
-    ciUrl: `https://github.com/example/playwright-automation/actions/runs/${9_000_000 + runNumber}`,
-    environment: workflow.envs[runOfDay % workflow.envs.length],
-    branch: 'main',
-    commit: `${runKey.slice(-7)}abcdef0123456789`,
-    commitShort: `${runKey.slice(-7)}`,
-    trigger: 'schedule',
-    actor: 'qa-bot',
-    generatedAt: new Date(finishedAt).toISOString().replace(/\.\d{3}Z$/, 'Z'),
-    reportPath: 'allure-report/index.html',
-    totals: { ...totals, impacted },
-    passRate: executed ? Number((totals.passed / executed).toFixed(4)) : 0,
-    failRate: executed ? Number((impacted / executed).toFixed(4)) : 0,
-    startedAt: new Date(finishedAt - wallClockMs).toISOString().replace(/\.\d{3}Z$/, 'Z'),
-    finishedAt: new Date(finishedAt).toISOString().replace(/\.\d{3}Z$/, 'Z'),
-    wallClockMs,
-    domains: perDomain.sort((a, b) => b.impacted - a.impacted || b.failRate - a.failRate),
-    suites: [...bySuite.values()].sort((a, b) => b.impacted - a.impacted),
-    layers: [layerRow('ui', 0.6), layerRow('api', 0.3), layerRow('e2e', 0.1)],
-    severities: [
-      severityRow('critical', 0.15),
-      severityRow('normal', 0.6),
-      severityRow('minor', 0.25),
-    ],
-    clusters: [...clusterCounts.values()].sort((a, b) => b.count - a.count).slice(0, 40),
-    failures: failures.slice(0, 400),
-    failureCount: failures.length,
-    flakyCount: failures.filter((f) => f.flaky).length,
-  };
+  writeFileSync(
+    join(dir, 'index.html'),
+    `<!doctype html><title>Allure — ${suite} ${runId}</title>` +
+      `<body style="font-family:system-ui;padding:40px">` +
+      `<h1>Allure report placeholder</h1>` +
+      `<p>${suite} run ${runId} — in production this is the real generated report.</p>`,
+  );
 }
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
 
 const prefixes = [];
-const random = rng(20260818);
+const random = rng(20260820);
+let idCursor = 0;
 
-for (const workflow of WORKFLOWS) {
+for (const suite of SUITES) {
+  let newestDir = null;
+  let newestId = null;
+
   for (let day = 0; day < DAYS; day += 1) {
-    for (let runOfDay = 0; runOfDay < workflow.perDay; runOfDay += 1) {
-      const run = buildRun(workflow, day, runOfDay, random);
-      const dir = join(ROOT, 'public', run.prefix);
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, 'qa-summary.json'), JSON.stringify(run));
+    for (let runOfDay = 0; runOfDay < suite.perDay; runOfDay += 1) {
+      const runId = String(RUN_ID_BASE + idCursor * 37);
+      idCursor += 1;
 
-      // A placeholder so the "Allure ↗" links resolve locally.
-      mkdirSync(join(dir, 'allure-report'), { recursive: true });
-      writeFileSync(
-        join(dir, 'allure-report', 'index.html'),
-        `<!doctype html><title>Allure — ${run.workflow} #${run.runNumber}</title>` +
-          `<body style="font-family:system-ui;padding:40px">` +
-          `<h1>Allure report placeholder</h1>` +
-          `<p>${run.workflow} run #${run.runNumber} — in production this is the real generated report.</p>`,
-      );
+      const run = buildRun(suite, day, runOfDay, runId, random);
+      const prefix = `runs/${suite.slug}/${runId}`;
+      const dir = join(PUBLIC, prefix);
+      writeReport(dir, run, suite.slug, runId);
 
-      prefixes.push(run.prefix);
+      prefixes.push(prefix);
+      newestDir = dir;
+      newestId = runId;
     }
+  }
+
+  // The mirror CI maintains. The dashboard must skip it — if it doesn't, the
+  // newest run of every suite is counted twice and its failures double.
+  if (newestDir) {
+    cpSync(newestDir, join(PUBLIC, `runs/${suite.slug}/latest`), { recursive: true });
+    console.log(`  ${suite.slug}: newest run ${newestId} mirrored to latest/`);
   }
 }
 
-// Newest first, matching what bucket listing returns.
-prefixes.sort((a, b) => b.localeCompare(a));
-writeFileSync(join(OUT, 'index.json'), JSON.stringify(prefixes, null, 2));
+// Fallback index for local dev, where there is no S3 to list. Deliberately
+// includes `latest/` so the skip logic is exercised on this path too.
+const withMirrors = [...prefixes, ...SUITES.map((s) => `runs/${s.slug}/latest`)];
+writeFileSync(join(OUT, 'index.json'), JSON.stringify(withMirrors.sort().reverse(), null, 2));
 
 writeFileSync(
-  join(ROOT, 'public', 'config.json'),
-  `${JSON.stringify({ dataBaseUrl: '', reportBaseUrl: '', runsPrefix: 'runs/', maxRunsPerWorkflow: 60 }, null, 2)}\n`,
+  join(PUBLIC, 'config.json'),
+  `${JSON.stringify(
+    {
+      dataBaseUrl: '',
+      reportBaseUrl: '',
+      runsPrefix: 'runs/',
+      maxRunsPerWorkflow: 60,
+      clusterRuns: 5,
+      ciRunUrlTemplate: '',
+    },
+    null,
+    2,
+  )}\n`,
 );
 
-console.log(`wrote ${prefixes.length} fixture runs to public/runs/`);
+console.log(`wrote ${prefixes.length} Allure-shaped fixture runs to public/runs/`);
 console.log('run `npm run dev` to view them');
