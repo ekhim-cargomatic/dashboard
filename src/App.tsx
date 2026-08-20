@@ -294,7 +294,9 @@ export default function App() {
                 <h2>Outcome mix per run</h2>
               </div>
               <p className="card-sub">
-                Volume and composition — a pass-rate rise caused by skipping tests shows up here.
+                Executed tests and how they landed. Tag-filtered runs report the whole suite with
+                non-matching scenarios skipped, so switch to <em>+ skipped</em> to see total suite
+                size — and to catch a pass rate that rose because more was skipped.
               </p>
               <VolumeChart points={trendPoints} />
             </div>

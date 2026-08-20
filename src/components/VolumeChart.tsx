@@ -27,13 +27,28 @@ export function VolumeChart({ points, height = 220 }: Props) {
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
   const [tip, setTip] = useState<TooltipState | null>(null);
 
+  /*
+   * Skipped is excluded by default, and that is not a cosmetic choice.
+   *
+   * A tag-filtered behave run emits every scenario in the suite and marks the
+   * non-matching ones skipped, so a real smoke run is 2,097 skipped out of 2,111.
+   * Stacking that swamps the plot: the bar is 99% grey and the passed/failed
+   * segments this chart exists to show are sub-pixel. Plotting executed tests
+   * keeps it readable; the toggle is there because "did the pass rate rise
+   * because tests were skipped?" is still a question worth being able to ask.
+   */
+  const [includeSkipped, setIncludeSkipped] = useState(false);
+  const stackOrder = includeSkipped ? STACK_ORDER : STACK_ORDER.filter((s) => s !== 'skipped');
+
   const plotWidth = Math.max(120, width - MARGIN.left - MARGIN.right);
   const plotHeight = height - MARGIN.top - MARGIN.bottom;
 
   const geometry = useMemo(() => {
     if (points.length === 0) return null;
 
-    const max = Math.max(...points.map((p) => p.total), 1);
+    const valueOf = (p: TrendPoint) =>
+      stackOrder.reduce((sum, status) => sum + (p[status as keyof TrendPoint] as number), 0);
+    const max = Math.max(...points.map(valueOf), 1);
     // Bars keep a 25% gutter, capped so a 3-run window doesn't render slabs.
     const slot = plotWidth / points.length;
     const barWidth = Math.max(3, Math.min(slot * 0.75, 42));
@@ -45,7 +60,7 @@ export function VolumeChart({ points, height = 220 }: Props) {
     if (ticks.length > 6) ticks.splice(0, ticks.length, 0, max / 2, max);
 
     return { max, slot, barWidth, y, ticks };
-  }, [points, plotWidth, plotHeight]);
+  }, [points, plotWidth, plotHeight, stackOrder]);
 
   if (!geometry || points.length === 0) {
     return <p className="empty-note">No runs in this window.</p>;
@@ -76,8 +91,12 @@ export function VolumeChart({ points, height = 220 }: Props) {
 
   return (
     <div className="chart-wrap" ref={wrapRef}>
-      <div className="legend" style={{ marginBottom: 8 }}>
-        {STACK_ORDER.map((status) => {
+      <div
+        className="legend"
+        style={{ marginBottom: 8, justifyContent: 'space-between', alignItems: 'center' }}
+      >
+        <span style={{ display: 'inline-flex', gap: 14, flexWrap: 'wrap' }}>
+        {stackOrder.map((status) => {
           const meta = statusMeta(status);
           return (
             <span className="legend-item" key={status}>
@@ -89,6 +108,23 @@ export function VolumeChart({ points, height = 220 }: Props) {
             </span>
           );
         })}
+        </span>
+        <span className="segmented" role="group" aria-label="Skipped tests">
+          <button
+            type="button"
+            aria-pressed={!includeSkipped}
+            onClick={() => setIncludeSkipped(false)}
+          >
+            Executed
+          </button>
+          <button
+            type="button"
+            aria-pressed={includeSkipped}
+            onClick={() => setIncludeSkipped(true)}
+          >
+            + skipped
+          </button>
+        </span>
       </div>
 
       <svg
@@ -130,7 +166,7 @@ export function VolumeChart({ points, height = 220 }: Props) {
                   height={plotHeight}
                   fill="transparent"
                 />
-                {STACK_ORDER.map((status) => {
+                {stackOrder.map((status) => {
                   const value = point[status as keyof TrendPoint] as number;
                   if (!value) return null;
 
