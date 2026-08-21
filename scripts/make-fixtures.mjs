@@ -175,10 +175,24 @@ function buildRun(suite, dayIndex, runOfDay, runId, random) {
         flaky: isFlakyCandidate,
         retriesCount: isFlakyCandidate ? 1 : 0,
         retriesStatusChange: isFlakyCandidate,
-        // Tags the domain map actually resolves, plus a layer tag.
-        tags: [TAG_FOR[domain], domain === 'quotes' || domain === 'amazon' ? 'api' : 'ui'].filter(
-          Boolean,
-        ),
+        /*
+         * A realistic tag mix, not just the routing one. Alongside the area tag
+         * this carries a layer tag, the scope selector every test in the run has,
+         * and a traceability id — exactly the bookkeeping the Tag grouping has to
+         * filter out. If it ever stops filtering, @smoke tops the chart with every
+         * test in the suite and each @C##### appears as its own one-test row.
+         */
+        tags: [
+          TAG_FOR[domain],
+          // Some scenarios genuinely span two areas; the Tag view should show
+          // both, which is why its rows legitimately overlap.
+          i % 7 === 0 ? 'pagination' : null,
+          domain === 'quotes' || domain === 'amazon' ? 'api' : 'ui',
+          suite.slug === 'regression' ? 'regression' : 'smoke',
+          `C${10000 + (i * 37) % 9000}`,
+          i % 11 === 0 ? 'CAR-1482' : null,
+          i % 13 === 0 ? 'tee7' : null,
+        ].filter(Boolean),
         severity: SEVERITIES[Math.floor(random() * SEVERITIES.length)],
         message: failing ? ERRORS[errorIndex] : '',
       });

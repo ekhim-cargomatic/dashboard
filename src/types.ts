@@ -30,6 +30,9 @@ export interface SuiteRow extends Bucket {
 export interface LayerRow extends Bucket {
   layer: string;
 }
+export interface TagRow extends Bucket {
+  tag: string;
+}
 export interface SeverityRow extends Bucket {
   severity: string;
 }
@@ -90,6 +93,8 @@ export interface RunSummary {
   domains: DomainRow[];
   suites: SuiteRow[];
   layers: LayerRow[];
+  /** Per-tag rows. Overlapping by nature — see GroupBy. */
+  tags: TagRow[];
   severities: SeverityRow[];
   clusters: FailureCluster[];
   failures: Failure[];
@@ -97,8 +102,15 @@ export interface RunSummary {
   flakyCount: number;
 }
 
-/** How the "most affected area" charts slice a run. */
-export type GroupBy = 'domain' | 'suite' | 'layer';
+/**
+ * How the "most affected area" charts slice a run.
+ *
+ * `domain` and `tag` are both tag-derived but differ in an important way:
+ * `domain` folds tags into tag_map's business areas and attributes each scenario
+ * to exactly one, so the rows partition the run. `tag` counts a scenario under
+ * every tag it carries, so those rows OVERLAP and do not sum to the run total.
+ */
+export type GroupBy = 'domain' | 'tag' | 'suite' | 'layer';
 
 /** Runtime config, fetched from /config.json so the bucket can change without a rebuild. */
 export interface AppConfig {

@@ -740,6 +740,18 @@ export const TAG_TO_DOMAINS: Record<string, string[]> = {
 
 export const LAYER_TAGS: string[] = ["api","ui","e2e","portal"];
 
+/** Scope selectors (@smoke, @regression) - they describe *when* a test runs, not what it covers. */
+export const SCOPE_TAGS: string[] = ["smoke","regression","happy_path"];
+
+/** Always-excluded gates (@wip, @bug, @skip …). */
+export const EXCLUDE_TAGS: string[] = ["wip","skip","bug","deprecated","dev","prod","cannot-run-since-staging-has-a-12hr-dbt"];
+
+/**
+ * Tags kept only for traceability — case ids, ticket refs, ad-hoc runner tags.
+ * Patterns come straight from tag_map's non_routing section.
+ */
+export const NON_ROUTING_PATTERNS: string[] = ["^C[0-9]+$","^C_[A-Z0-9_]+$","^C[0-9]{1,2}$","^TC-[0-9]+$","^CAR-[0-9]+$","^bug-CAR-[0-9]+$","^tee[0-9]+$"];
+
 export const DOMAIN_BY_SLUG: Record<string, DomainDef> = Object.fromEntries(
   DOMAINS.map((d) => [d.slug, d]),
 );

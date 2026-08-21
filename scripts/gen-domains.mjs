@@ -77,6 +77,18 @@ function build(tagMapPath) {
     }
   });
 
+  // Tags that exist for traceability rather than to describe an area: legacy case
+  // ids, Linear/bug refs, ad-hoc runner tags. tag_map declares these as regexes
+  // under `non_routing`, so the dashboard filters them out of the tag breakdown
+  // using tag_map's own patterns instead of guessing.
+  const nonRouting = [];
+  for (const entry of Object.values(raw.non_routing ?? {})) {
+    for (const pattern of entry?.patterns ?? [entry?.pattern]) {
+      // Stored unanchored-at-the-@ so they can be tested against bare tag names.
+      if (pattern) nonRouting.push(String(pattern).replace('^@', '^'));
+    }
+  }
+
   return {
     version: raw.version ?? 1,
     source: 'tag_map.yaml',
@@ -84,6 +96,8 @@ function build(tagMapPath) {
     tagToDomains: Object.fromEntries(Object.entries(tagToDomains).sort(([a], [b]) => a.localeCompare(b))),
     layers: (raw.layers ?? []).map(stripAt),
     excludeAlways: (raw.exclude_always ?? []).map(stripAt),
+    scopes: Object.keys(raw.scopes ?? {}),
+    nonRoutingPatterns: nonRouting,
   };
 }
 
@@ -111,6 +125,18 @@ export const DOMAINS: DomainDef[] = ${JSON.stringify(data.domains, null, 2)};
 export const TAG_TO_DOMAINS: Record<string, string[]> = ${JSON.stringify(data.tagToDomains, null, 2)};
 
 export const LAYER_TAGS: string[] = ${JSON.stringify(data.layers)};
+
+/** Scope selectors (@smoke, @regression) - they describe *when* a test runs, not what it covers. */
+export const SCOPE_TAGS: string[] = ${JSON.stringify(data.scopes)};
+
+/** Always-excluded gates (@wip, @bug, @skip …). */
+export const EXCLUDE_TAGS: string[] = ${JSON.stringify(data.excludeAlways)};
+
+/**
+ * Tags kept only for traceability — case ids, ticket refs, ad-hoc runner tags.
+ * Patterns come straight from tag_map's non_routing section.
+ */
+export const NON_ROUTING_PATTERNS: string[] = ${JSON.stringify(data.nonRoutingPatterns)};
 
 export const DOMAIN_BY_SLUG: Record<string, DomainDef> = Object.fromEntries(
   DOMAINS.map((d) => [d.slug, d]),

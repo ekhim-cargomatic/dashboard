@@ -735,5 +735,19 @@
     "dev",
     "prod",
     "cannot-run-since-staging-has-a-12hr-dbt"
+  ],
+  "scopes": [
+    "smoke",
+    "regression",
+    "happy_path"
+  ],
+  "nonRoutingPatterns": [
+    "^C[0-9]+$",
+    "^C_[A-Z0-9_]+$",
+    "^C[0-9]{1,2}$",
+    "^TC-[0-9]+$",
+    "^CAR-[0-9]+$",
+    "^bug-CAR-[0-9]+$",
+    "^tee[0-9]+$"
   ]
 }

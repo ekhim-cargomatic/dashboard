@@ -28,6 +28,7 @@ type Theme = 'light' | 'dark' | 'system';
 
 const GROUP_LABELS: Record<GroupBy, string> = {
   domain: 'Risk domain',
+  tag: 'Tag',
   suite: 'Feature',
   layer: 'Layer',
 };
@@ -328,6 +329,17 @@ export default function App() {
                   ? 'Where failures landed across the whole window. Large areas dominate simply by being large — switch to fail rate to normalise.'
                   : 'How bad each area is for its size. A small area can top this chart on a handful of tests — check the volume view before acting.'}{' '}
                 Click a bar to filter the failures table.
+                {groupBy === 'tag' && (
+                  <>
+                    {' '}
+                    <strong>
+                      A scenario carries several tags, so these rows overlap and do not sum to the
+                      run total.
+                    </strong>{' '}
+                    Scope (@smoke), layer (@ui) and traceability tags (@C22747, @CAR-1234) are
+                    excluded.
+                  </>
+                )}
               </p>
               <AreaImpactChart
                 areas={areas}

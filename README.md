@@ -80,18 +80,53 @@ automatically. Entirely optional; raw Allure works fine.
 | Flakiest tests | Which tests keep changing their verdict? |
 | Runs table | Per-run detail, with deep links into the full Allure report |
 
+### Picking a suite
+
+The **Suite** dropdown lists every prefix under `runs/` with its run count, so
+`smoke`, `regression` and anything added later appear automatically — no config.
+Selecting one scopes the whole page: the trend then walks every report published
+under that suite, in `run_id` order.
+
+It defaults to the busiest suite rather than "all". A trend line across mixed
+suites is misleading — a 44-test targeted run and a 2,111-scenario regression have
+unrelated pass rates, and interleaving them by time produces a sawtooth that looks
+like instability but is just two populations. **All suites** stays one click away
+for cross-suite comparison.
+
 ### How "area" is determined
 
-Three groupings, switchable in the filter row:
+Four groupings, switchable in the filter row. All the charts and tables follow
+the selection.
 
-- **Risk domain** — the 26 business areas in `playwright-automation/tag_map.yaml`
-  (invoices, order_billing, unified_view, …), matched from each scenario's tags in
-  `data/suites.json`. The default, and the most useful for "who needs to look".
+- **Risk domain** (default) — the 26 business areas in
+  `playwright-automation/tag_map.yaml` (invoices, order_billing, unified_view, …),
+  folded from each scenario's tags. Each scenario is attributed to exactly **one**
+  domain, so the rows partition the run and the totals add up.
+- **Tag** — the raw behave tags, straight from `data/suites.json`. Doesn't depend
+  on `tag_map.yaml` being current, so it's the honest answer when tags have moved
+  on. A scenario appears under **every** tag it carries, so these rows *overlap
+  and do not sum to the run total* — the chart says so when this grouping is
+  active.
 - **Feature** — the behave Feature, from `data/behaviors.json`. (Not the file path:
-  allure-behave reliably sets the `feature` label but rarely the
-  parentSuite/suite labels that would give a directory, so `data/suites.json` is
-  usually flat.)
+  allure-behave reliably sets the `feature` label but rarely the parentSuite/suite
+  labels that would give a directory, so `data/suites.json` is usually flat.)
 - **Layer** — `@api` / `@ui` / `@e2e`.
+
+#### What the Tag grouping leaves out
+
+Behave tags do several jobs, and leaving the non-area ones in makes the chart
+useless: every test in a smoke run carries `@smoke`, and each case id appears
+exactly once, so you get one row per test. Excluded:
+
+| Kind | Examples | Source of the exclusion |
+|---|---|---|
+| Scope selectors | `@smoke`, `@regression`, `@happy_path` | tag_map `scopes` |
+| Layer | `@ui`, `@api`, `@e2e`, `@portal` | tag_map `layers` (its own grouping) |
+| Execution gates | `@wip`, `@bug`, `@skip`, `@deprecated` | tag_map `exclude_always` |
+| Traceability ids | `@C22747`, `@C_AMZ_EDI_210`, `@CAR-1482`, `@TC-01`, `@tee7` | tag_map `non_routing` patterns |
+
+Those come from `tag_map.yaml` itself — including the `non_routing` regexes — so
+they stay correct as conventions change rather than being guessed in the dashboard.
 
 A scenario tagged `@pagination @invoices` matches both the generic `tables` bucket
 and `invoices`. Counting it in both would double-count the totals, so each

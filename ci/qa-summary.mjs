@@ -79,6 +79,30 @@ class DomainResolver {
   }
 }
 
+/**
+ * Tags that describe an *area*, as opposed to bookkeeping (scope selectors, layer
+ * tags, execution gates, and the traceability ids tag_map lists under
+ * non_routing). Keeping those in would swamp a per-tag breakdown: every test in a
+ * smoke run carries @smoke, and each case id appears exactly once.
+ */
+class AreaTagFilter {
+  constructor(domainMap) {
+    this.bookkeeping = new Set([
+      ...(domainMap.scopes ?? []),
+      ...(domainMap.layers ?? []),
+      ...(domainMap.excludeAlways ?? []),
+    ]);
+    // tag_map writes these uppercase; tags arrive lowercased, so match loosely.
+    this.nonRouting = (domainMap.nonRoutingPatterns ?? []).map((p) => new RegExp(p, 'i'));
+  }
+
+  isArea(tag) {
+    const t = String(tag).toLowerCase();
+    if (!t || this.bookkeeping.has(t)) return false;
+    return !this.nonRouting.some((re) => re.test(t));
+  }
+}
+
 // --------------------------------------------------------------------------- //
 // Failure fingerprinting
 // --------------------------------------------------------------------------- //
@@ -163,12 +187,13 @@ const blankBucket = () => ({
 // Aggregation
 // --------------------------------------------------------------------------- //
 
-function summarize(resultsDir, resolver, maxFailures) {
+function summarize(resultsDir, resolver, tagFilter, maxFailures) {
   const totals = blankBucket();
   const byDomain = new Map();
   const bySuite = new Map();
   const bySeverity = new Map();
   const byLayer = new Map();
+  const byTag = new Map();
 
   const clusters = new Map();
   const failures = [];
@@ -222,6 +247,10 @@ function summarize(resultsDir, resolver, maxFailures) {
     bump(bucketFor(bySuite, suite));
     bump(bucketFor(bySeverity, severity));
     for (const layer of layers) bump(bucketFor(byLayer, layer));
+    // Overlapping by design: a scenario counts under each area tag it carries.
+    for (const tag of tags) {
+      if (tagFilter.isArea(tag)) bump(bucketFor(byTag, tag));
+    }
 
     if (BAD_STATUSES.includes(status)) {
       const message = String(result.statusDetails?.message ?? '').trim();
@@ -316,6 +345,7 @@ function summarize(resultsDir, resolver, maxFailures) {
     domains: asRows(byDomain, 'domain'),
     suites: asRows(bySuite, 'suite'),
     layers: asRows(byLayer, 'layer'),
+    tags: asRows(byTag, 'tag'),
     severities: asRows(bySeverity, 'severity').sort(
       (a, b) => rankSeverity(a.severity) - rankSeverity(b.severity),
     ),
@@ -394,7 +424,13 @@ try {
 }
 
 const resolver = new DomainResolver(domainMap);
-const summary = summarize(resolve(args.results), resolver, Number(args['max-failures']) || 400);
+const tagFilter = new AreaTagFilter(domainMap);
+const summary = summarize(
+  resolve(args.results),
+  resolver,
+  tagFilter,
+  Number(args['max-failures']) || 400,
+);
 
 const repo = args.repo || envDefault('GITHUB_REPOSITORY');
 const runId = args['run-id'] || envDefault('GITHUB_RUN_ID');

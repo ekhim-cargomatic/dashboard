@@ -17,7 +17,7 @@
  * lazily and only for a handful of recent runs — see `enrichWithFailureDetail`.
  */
 
-import { resolveDomains, resolveLayers } from './domains';
+import { isAreaTag, resolveDomains, resolveLayers } from './domains';
 import type {
   AppConfig,
   Bucket,
@@ -286,6 +286,7 @@ export async function loadAllureRun(
   const byFeature = new Map<string, ReturnType<typeof blankBucket>>();
   const byLayer = new Map<string, ReturnType<typeof blankBucket>>();
   const bySeverity = new Map<string, ReturnType<typeof blankBucket>>();
+  const byTag = new Map<string, ReturnType<typeof blankBucket>>();
 
   const bucketFor = (map: Map<string, ReturnType<typeof blankBucket>>, key: string) => {
     let bucket = map.get(key);
@@ -309,6 +310,12 @@ export async function loadAllureRun(
     bump(bucketFor(byFeature, test.feature));
     bump(bucketFor(bySeverity, test.severity));
     for (const layer of test.layers) bump(bucketFor(byLayer, layer));
+    // A scenario lands in every area tag it carries, so these buckets overlap by
+    // design and will not sum to the run total. That is the honest shape for
+    // "which area is affected" when a scenario genuinely spans two areas.
+    for (const tag of test.tags) {
+      if (isAreaTag(tag)) bump(bucketFor(byTag, tag));
+    }
   }
 
   const stat = summary.statistic;
@@ -395,6 +402,7 @@ export async function loadAllureRun(
     domains: rowsFrom(byDomain, 'domain'),
     suites: rowsFrom(byFeature, 'suite'),
     layers: rowsFrom(byLayer, 'layer'),
+    tags: rowsFrom(byTag, 'tag'),
     severities: rowsFrom(bySeverity, 'severity').sort(
       (a, b) => rankSeverity(a.severity) - rankSeverity(b.severity),
     ),

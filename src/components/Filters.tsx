@@ -36,7 +36,8 @@ const RANGES = [
 ];
 
 const GROUP_OPTIONS: { value: GroupBy; label: string; hint: string }[] = [
-  { value: 'domain', label: 'Risk domain', hint: 'Business areas from tag_map.yaml' },
+  { value: 'domain', label: 'Risk domain', hint: 'Behave tags folded into tag_map.yaml business areas — one bucket per scenario' },
+  { value: 'tag', label: 'Tag', hint: 'Raw behave tags — a scenario appears under each of its tags, so rows overlap' },
   { value: 'suite', label: 'Feature', hint: 'The Feature the scenario belongs to' },
   { value: 'layer', label: 'Layer', hint: 'API / UI / E2E tags' },
 ];
@@ -47,17 +48,22 @@ function Select({
   options,
   onChange,
   allLabel,
+  alwaysShow = false,
 }: {
   label: string;
   value: string;
   options: Facet[];
   onChange: (next: string) => void;
   allLabel: string;
+  /** Keep the control even with one option — true for primary navigation. */
+  alwaysShow?: boolean;
 }) {
-  // A dropdown whose only choice is "all" is dead UI. Environment and branch come
-  // from an `environment.properties` that CI does not currently write, so they are
-  // usually empty — hide them rather than showing an empty control.
-  if (options.length < 2 && !value) return null;
+  // A dropdown whose only choice is "all" is dead UI: environment and branch come
+  // from an environment.properties CI does not currently write, so they are usually
+  // empty. Suite is exempt — it is how you move between smoke, regression and the
+  // rest, and it needs to be visible (and to show what exists) even on day one
+  // when only one suite has published.
+  if (!alwaysShow && options.length < 2 && !value) return null;
 
   return (
     <div className="field">
@@ -92,6 +98,7 @@ export function Filters({
         options={facets.workflows}
         onChange={(workflow) => onChange({ ...filters, workflow })}
         allLabel="All suites"
+        alwaysShow
       />
       <Select
         label="Environment"

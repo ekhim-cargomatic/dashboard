@@ -74,15 +74,23 @@ export function facets(runs: RunSummary[]) {
 /** Read the rows for the selected grouping out of a run, uniformly keyed. */
 export function rowsFor(run: RunSummary, groupBy: GroupBy): { key: string; impacted: number; total: number; failRate: number; passed: number; skipped: number }[] {
   const source =
-    groupBy === 'domain' ? run.domains : groupBy === 'suite' ? run.suites : run.layers;
+    groupBy === 'domain'
+      ? run.domains
+      : groupBy === 'tag'
+        ? (run.tags ?? [])
+        : groupBy === 'suite'
+          ? run.suites
+          : run.layers;
 
   return source.map((row) => ({
     key:
       groupBy === 'domain'
         ? (row as { domain: string }).domain
-        : groupBy === 'suite'
-          ? (row as { suite: string }).suite
-          : (row as { layer: string }).layer,
+        : groupBy === 'tag'
+          ? (row as { tag: string }).tag
+          : groupBy === 'suite'
+            ? (row as { suite: string }).suite
+            : (row as { layer: string }).layer,
     impacted: row.impacted,
     total: row.total,
     failRate: row.failRate,
@@ -94,6 +102,9 @@ export function rowsFor(run: RunSummary, groupBy: GroupBy): { key: string; impac
 export function labelForKey(key: string, groupBy: GroupBy): string {
   if (groupBy === 'domain') return labelForDomain(key);
   if (groupBy === 'layer') return key === 'untagged' ? 'Untagged' : key.toUpperCase();
+  // Tags keep their literal @ prefix so they are obviously the raw behave tag
+  // rather than a tag_map domain with a similar name.
+  if (groupBy === 'tag') return `@${key}`;
   return key;
 }
 
