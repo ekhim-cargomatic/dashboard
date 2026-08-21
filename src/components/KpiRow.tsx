@@ -158,12 +158,6 @@ export function KpiRow({ latest, delta, trendPoints }: Props) {
       />
 
       <Tile
-        label="Flaky in run"
-        value={int(latest.flakyCount)}
-        meta={<span className="dim">passed on retry</span>}
-      />
-
-      <Tile
         label="Wall clock"
         value={duration(latest.wallClockMs)}
         meta={

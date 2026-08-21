@@ -9,7 +9,7 @@
 
 import { useState } from 'react';
 
-import type { AreaImpact, FlakyTest, MergedCluster } from '../lib/aggregate';
+import type { AreaImpact, MergedCluster } from '../lib/aggregate';
 import { dateTime, duration, int, pct, relativeTime, truncate } from '../lib/format';
 import { labelForDomain } from '../lib/domains.generated';
 import { statusMeta } from '../lib/status';
@@ -120,59 +120,6 @@ export function ClustersTable({ clusters }: { clusters: MergedCluster[] }) {
 
 // --------------------------------------------------------------------------- //
 
-export function FlakyTable({ tests }: { tests: FlakyTest[] }) {
-  if (tests.length === 0) {
-    return (
-      <p className="empty-note">
-        No tests changed verdict in this window — the suite is behaving consistently.
-      </p>
-    );
-  }
-
-  return (
-    <div className="table-scroll">
-      <table className="data">
-        <caption className="visually-hidden">
-          Tests that changed between passing and failing, ranked by number of flips
-        </caption>
-        <thead>
-          <tr>
-            <th>Test</th>
-            <th>Area</th>
-            <th className="num">Flips</th>
-            <th className="num">Failed</th>
-            <th>Latest</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tests.map((test) => (
-            <tr key={test.historyId}>
-              <td>
-                {truncate(test.name, 70)}
-                <div className="dim" style={{ fontSize: 11 }}>
-                  {test.suite}
-                </div>
-              </td>
-              <td>{labelForDomain(test.domain)}</td>
-              <td className="num">
-                <b>{test.flips}</b>
-              </td>
-              <td className="num dim">
-                {test.failures} / {test.runsSeen}
-              </td>
-              <td>
-                <StatusChip status={test.lastStatus} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// --------------------------------------------------------------------------- //
-
 export function RunsTable({
   runs,
   config,
@@ -269,8 +216,15 @@ export function RunsTable({
 // --------------------------------------------------------------------------- //
 
 export function FailuresTable({ run, areaFilter }: { run: RunSummary; areaFilter: string | null }) {
+  // The area key can be a tag, a domain or a feature depending on how the chart
+  // is grouped, so match all three rather than assuming one.
   const failures = areaFilter
-    ? run.failures.filter((failure) => failure.domain === areaFilter || failure.suite === areaFilter)
+    ? run.failures.filter(
+        (failure) =>
+          failure.domain === areaFilter ||
+          failure.suite === areaFilter ||
+          (failure.tags ?? []).includes(areaFilter),
+      )
     : run.failures;
 
   if (failures.length === 0) {
@@ -300,7 +254,6 @@ export function FailuresTable({ run, areaFilter }: { run: RunSummary; areaFilter
                 {truncate(failure.name, 64)}
                 <div className="dim" style={{ fontSize: 11 }}>
                   {failure.suite}
-                  {failure.flaky && <span className="tag" style={{ marginLeft: 6 }}>flaky</span>}
                 </div>
               </td>
               <td>{labelForDomain(failure.domain)}</td>

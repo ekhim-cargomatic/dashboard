@@ -8,7 +8,7 @@
  */
 
 import { labelForDomain } from './domains.generated';
-import type { Failure, GroupBy, RunSummary } from '../types';
+import type { GroupBy, RunSummary } from '../types';
 
 export interface Filters {
   workflow: string; // '' = all
@@ -284,98 +284,6 @@ export function heatmap(runs: RunSummary[], groupBy: GroupBy, topN = 12, maxRuns
   });
 
   return { rows, runs: chronological };
-}
-
-// --------------------------------------------------------------------------- //
-// Flakiness
-// --------------------------------------------------------------------------- //
-
-export interface FlakyTest {
-  historyId: string;
-  name: string;
-  domain: string;
-  suite: string;
-  /** Runs where this test failed or broke. */
-  failures: number;
-  /** Runs where the test flipped status vs the run before it. */
-  flips: number;
-  runsSeen: number;
-  lastStatus: string;
-  lastMessage: string;
-}
-
-/**
- * Tests that change their mind.
- *
- * A test failing every run is a genuine defect and shows up in the area charts.
- * The expensive ones are the tests that flip — they erode trust in the suite —
- * so rank by flips, not by failure count.
- *
- * Only failures are present in a summary (passes are counted, not listed), so a
- * run where a test is absent from `failures` is treated as a pass for that run.
- */
-export function flakyTests(runs: RunSummary[], limit = 20): FlakyTest[] {
-  const chronological = [...runs].sort(byTimeAscending);
-
-  // historyId -> per-run status, in chronological order.
-  const timeline = new Map<string, { failure: Failure | null }[]>();
-  const meta = new Map<string, Failure>();
-
-  const seenIds = new Set<string>();
-  for (const run of chronological) {
-    for (const failure of run.failures) {
-      if (failure.historyId) seenIds.add(failure.historyId);
-    }
-  }
-
-  for (const historyId of seenIds) {
-    timeline.set(
-      historyId,
-      chronological.map((run) => {
-        const failure = run.failures.find((f) => f.historyId === historyId) ?? null;
-        if (failure) meta.set(historyId, failure);
-        return { failure };
-      }),
-    );
-  }
-
-  const results: FlakyTest[] = [];
-
-  for (const [historyId, entries] of timeline) {
-    const info = meta.get(historyId);
-    if (!info) continue;
-
-    let failures = 0;
-    let flips = 0;
-    let previousFailed: boolean | null = null;
-
-    for (const entry of entries) {
-      const failed = entry.failure !== null;
-      if (failed) failures += 1;
-      if (previousFailed !== null && previousFailed !== failed) flips += 1;
-      previousFailed = failed;
-    }
-
-    // Never flipped: either always green (absent) or a hard, consistent failure.
-    if (flips === 0) continue;
-
-    const last = entries[entries.length - 1];
-    results.push({
-      historyId,
-      name: info.name,
-      domain: info.domain,
-      suite: info.suite,
-      failures,
-      flips,
-      runsSeen: entries.length,
-      lastStatus: last.failure ? last.failure.status : 'passed',
-      lastMessage: last.failure?.message ?? '',
-    });
-  }
-
-  return results
-    .sort((a, b) => b.flips - a.flips || b.failures - a.failures || a.name.localeCompare(b.name))
-    .slice(0, limit);
 }
 
 // --------------------------------------------------------------------------- //

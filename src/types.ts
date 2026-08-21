@@ -60,7 +60,8 @@ export interface Failure {
   durationMs: number;
   historyId: string;
   uuid: string;
-  flaky: boolean;
+  /** The scenario's behave tags — what a tag-bar click filters on. */
+  tags: string[];
 }
 
 /** One `qa-summary.json`, i.e. one CI run. */
@@ -99,7 +100,6 @@ export interface RunSummary {
   clusters: FailureCluster[];
   failures: Failure[];
   failureCount: number;
-  flakyCount: number;
 }
 
 /**

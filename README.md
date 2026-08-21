@@ -29,7 +29,7 @@ aggregates need:
 | File | What it gives |
 |---|---|
 | `widgets/summary.json` | pass/fail/broken/skipped totals, wall-clock start/stop |
-| `data/suites.json` | every test with status, duration, flaky flag, **and its behave tags** |
+| `data/suites.json` | every test with status, duration, **and its behave tags** |
 
 That second file carrying `tags` is what makes risk-domain attribution possible
 client-side. Without it the only source would be one `data/test-cases/<uid>.json`
@@ -75,9 +75,8 @@ automatically. Entirely optional; raw Allure works fine.
 | Pass rate trend | Is the suite getting better or worse? |
 | Outcome mix per run | Did the pass rate rise because tests passed, or because they were skipped? |
 | **Most affected areas** | Where did the failures land — by volume and by fail rate? |
-| **Regression or flake?** | Has an area been red *every* run, or just occasionally? |
+| **Persistent or one-off?** | Has an area failed in *every* run, or just occasionally? |
 | Top failure reasons | Which root causes account for the most failures? |
-| Flakiest tests | Which tests keep changing their verdict? |
 | Runs table | Per-run detail, with deep links into the full Allure report |
 
 ### Picking a suite
@@ -95,22 +94,22 @@ for cross-suite comparison.
 
 ### How "area" is determined
 
-Four groupings, switchable in the filter row. All the charts and tables follow
-the selection.
+Areas are the **raw behave tags**, read from `data/suites.json`. That's the
+behave-native answer and it doesn't depend on `tag_map.yaml` being current.
 
-- **Risk domain** (default) — the 26 business areas in
-  `playwright-automation/tag_map.yaml` (invoices, order_billing, unified_view, …),
-  folded from each scenario's tags. Each scenario is attributed to exactly **one**
-  domain, so the rows partition the run and the totals add up.
-- **Tag** — the raw behave tags, straight from `data/suites.json`. Doesn't depend
-  on `tag_map.yaml` being current, so it's the honest answer when tags have moved
-  on. A scenario appears under **every** tag it carries, so these rows *overlap
-  and do not sum to the run total* — the chart says so when this grouping is
-  active.
-- **Feature** — the behave Feature, from `data/behaviors.json`. (Not the file path:
-  allure-behave reliably sets the `feature` label but rarely the parentSuite/suite
-  labels that would give a directory, so `data/suites.json` is usually flat.)
-- **Layer** — `@api` / `@ui` / `@e2e`.
+One consequence to keep in mind: a scenario appears under **every** tag it
+carries, so these rows *overlap and do not sum to the run total*. The chart says
+so on the card. That's the honest shape when a scenario genuinely spans two areas
+— `@pagination @invoices` belongs to both.
+
+Three other groupings are implemented in `lib/aggregate.ts` and are one constant
+away (`GROUP_BY` in `src/App.tsx`) if you ever want them back:
+
+- **`domain`** — the 26 business areas in `playwright-automation/tag_map.yaml`,
+  folded from tags, with each scenario attributed to exactly **one** domain so the
+  rows partition the run and totals add up.
+- **`suite`** — the behave Feature, from `data/behaviors.json`.
+- **`layer`** — `@api` / `@ui` / `@e2e`.
 
 #### What the Tag grouping leaves out
 
@@ -128,13 +127,21 @@ exactly once, so you get one row per test. Excluded:
 Those come from `tag_map.yaml` itself — including the `non_routing` regexes — so
 they stay correct as conventions change rather than being guessed in the dashboard.
 
-A scenario tagged `@pagination @invoices` matches both the generic `tables` bucket
-and `invoices`. Counting it in both would double-count the totals, so each
-scenario is attributed to one **primary** domain: the least generic match,
-tie-broken by declaration order in `tag_map.yaml`. Generic buckets (`tables`,
-`admin`, `documents`, `exceptions`, `routing`) only win when nothing specific
-matched. Scenarios matching no domain land in `unmapped` — a large `unmapped`
-bucket means tags need attention.
+### How the numbers are derived
+
+| Figure | Formula |
+|---|---|
+| executed | `total − skipped` |
+| pass rate | `passed / executed` |
+| needs attention | `failed + broken` |
+| fail rate | `(failed + broken) / executed` |
+| wall clock | `time.stop − time.start` from `widgets/summary.json` |
+
+Totals come from the same `data/suites.json` leaves every breakdown is built
+from, **not** from `widgets/summary.json`. The two normally agree exactly
+(verified against production: 2,111 either way), but taking headline numbers from
+one source and per-area rows from another would let the page contradict itself.
+`summary.json` remains the source for wall-clock time, which the leaves can't give.
 
 ### Reading "Tests executed"
 
@@ -204,7 +211,7 @@ npm run dev        # http://localhost:5173
 
 The fixtures are *real Allure file shapes*, so `npm run dev` exercises the same
 parsing path production uses. They deliberately contain the cases that break naive
-implementations: a sustained regression, one bad night that recovers, a flaky test,
+implementations: a sustained regression, one bad night that recovers,
 a suite covering only some domains, run ids that straddle a digit-count boundary
 (so numeric sorting is actually proven), and a `latest/` mirror that must be
 skipped.

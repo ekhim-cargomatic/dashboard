@@ -207,29 +207,86 @@ a:hover {
   padding: 20px 24px 64px;
 }
 
+/*
+ * Top bar: identity on the left, scope and view controls on the right, one
+ * bordered surface. Replaces a title block stacked above a separate filter card.
+ */
 .topbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
   flex-wrap: wrap;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px 16px;
   margin-bottom: 18px;
 }
 
+.brand {
+  min-width: 0;
+}
+
 .topbar h1 {
-  font-size: 19px;
+  font-size: 17px;
+  line-height: 1.25;
 }
 
-.topbar .sub {
+.brand-meta {
+  margin: 3px 0 0;
+  font-size: 12px;
   color: var(--text-secondary);
-  font-size: 13px;
-  margin-top: 2px;
-}
-
-.topbar-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.brand-meta strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.brand-meta .sep {
+  color: var(--text-muted);
+}
+
+.topbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.topbar-divider {
+  width: 1px;
+  align-self: stretch;
+  min-height: 26px;
+  background: var(--border);
+}
+
+/* Label above its select, so the bar reads without a legend row. */
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.control-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.icon-btn {
+  font-size: 15px;
+  line-height: 1;
+  padding: 7px 10px;
 }
 
 .grid {
@@ -291,17 +348,6 @@ section.block {
 }
 
 /* ------------------------------------------------------------- controls -- */
-
-.filters {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-}
 
 .field {
   display: flex;

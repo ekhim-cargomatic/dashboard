@@ -7,7 +7,7 @@
  * it in two small fetches per run rather than thousands:
  *
  *   widgets/summary.json   totals + wall-clock start/stop (epoch ms)
- *   data/suites.json       every test with status, TAGS, duration and flaky flag
+ *   data/suites.json       every test with status, TAGS and duration
  *
  * `data/suites.json` carrying `tags` is what makes this viable: risk-domain
  * attribution needs the behave tags, and without that file the only source would
@@ -50,9 +50,6 @@ interface AllureNode {
   uid?: string;
   status?: string;
   time?: { start?: number; stop?: number; duration?: number };
-  flaky?: boolean;
-  retriesCount?: number;
-  retriesStatusChange?: boolean;
   tags?: string[];
   children?: AllureNode[];
 }
@@ -88,7 +85,6 @@ interface FlatTest {
   status: Status;
   durationMs: number;
   tags: string[];
-  flaky: boolean;
   /** Nested suite path, when the report has one. */
   path: string;
   feature: string;
@@ -270,9 +266,6 @@ export async function loadAllureRun(
       status: asStatus(node.status),
       durationMs: node.time?.duration ?? 0,
       tags,
-      // `flaky` is Allure's own marker; a retry that changed verdict is the
-      // other, more reliable signal within a single run.
-      flaky: Boolean(node.flaky) || Boolean(node.retriesStatusChange),
       path: path.join(' / ') || '(root)',
       feature: featureIndex.get(node.uid!) ?? '(no feature)',
       severity: severityIndex.get(node.uid!) ?? 'normal',
@@ -318,17 +311,42 @@ export async function loadAllureRun(
     }
   }
 
-  const stat = summary.statistic;
-  const totals = {
-    total: stat.total ?? tests.length,
-    durationMs: tests.reduce((sum, t) => sum + t.durationMs, 0),
-    passed: stat.passed ?? 0,
-    failed: stat.failed ?? 0,
-    broken: stat.broken ?? 0,
-    skipped: stat.skipped ?? 0,
-    unknown: stat.unknown ?? 0,
-    impacted: (stat.failed ?? 0) + (stat.broken ?? 0),
-  };
+  /*
+   * Totals come from the same `data/suites.json` leaves that every breakdown is
+   * built from, not from widgets/summary.json.
+   *
+   * The two normally agree exactly (verified against production: 2111 either
+   * way). But if they ever diverge — a truncated upload, a retry counted
+   * differently — taking headline numbers from one source and the per-area rows
+   * from another makes the page contradict itself, and the domain rows visibly
+   * fail to add up to the total. Consistency matters more here than matching
+   * Allure's own arithmetic, and summary.json remains the source for wall-clock
+   * time, which the leaves cannot give.
+   */
+  const stat = summary.statistic ?? {};
+  const counted = { passed: 0, failed: 0, broken: 0, skipped: 0, unknown: 0 };
+  for (const test of tests) counted[test.status] += 1;
+
+  const totals =
+    tests.length > 0
+      ? {
+          total: tests.length,
+          durationMs: tests.reduce((sum, t) => sum + t.durationMs, 0),
+          ...counted,
+          impacted: counted.failed + counted.broken,
+        }
+      : {
+          // No readable suites.json — fall back to the summary so the run still
+          // contributes a trend point rather than vanishing.
+          total: stat.total ?? 0,
+          durationMs: 0,
+          passed: stat.passed ?? 0,
+          failed: stat.failed ?? 0,
+          broken: stat.broken ?? 0,
+          skipped: stat.skipped ?? 0,
+          unknown: stat.unknown ?? 0,
+          impacted: (stat.failed ?? 0) + (stat.broken ?? 0),
+        };
   const executed = totals.total - totals.skipped;
 
   const start = summary.time?.start;
@@ -354,7 +372,7 @@ export async function loadAllureRun(
       durationMs: t.durationMs,
       historyId: t.name,
       uuid: t.uid,
-      flaky: t.flaky,
+      tags: t.tags,
     }))
     .sort(
       (a, b) =>
@@ -409,7 +427,6 @@ export async function loadAllureRun(
     clusters: [],
     failures,
     failureCount: failures.length,
-    flakyCount: tests.filter((t) => t.flaky).length,
   };
 }
 

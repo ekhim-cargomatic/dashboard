@@ -5,7 +5,6 @@ import {
   areaImpact,
   deltaFromPrevious,
   facets,
-  flakyTests,
   heatmap,
   mergeClusters,
   trend,
@@ -21,17 +20,22 @@ import { Filters } from './components/Filters';
 import { KpiRow } from './components/KpiRow';
 import { TrendChart } from './components/TrendChart';
 import { VolumeChart } from './components/VolumeChart';
-import { AreaTable, ClustersTable, FailuresTable, FlakyTable, RunsTable } from './components/Tables';
+import { AreaTable, ClustersTable, FailuresTable, RunsTable } from './components/Tables';
 import type { AppConfig, GroupBy, RunSummary } from './types';
 
 type Theme = 'light' | 'dark' | 'system';
 
-const GROUP_LABELS: Record<GroupBy, string> = {
-  domain: 'Risk domain',
-  tag: 'Tag',
-  suite: 'Feature',
-  layer: 'Layer',
-};
+/**
+ * Areas are grouped by raw behave tag.
+ *
+ * The grouping used to be switchable (domain / tag / feature / layer). Tag is the
+ * behave-native answer to "which area is affected" and does not depend on
+ * tag_map.yaml being current, so it is now the single grouping and the toggle is
+ * gone. The other groupings remain implemented in lib/aggregate.ts — changing
+ * this constant is all it takes to switch.
+ */
+const GROUP_BY: GroupBy = 'tag';
+const GROUP_LABEL = 'Tag';
 
 interface LoadState {
   status: 'loading' | 'ready' | 'error';
@@ -48,7 +52,6 @@ export default function App() {
   const [load, setLoad] = useState<LoadState>({ status: 'loading', loaded: 0, total: 0 });
 
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
-  const [groupBy, setGroupBy] = useState<GroupBy>('domain');
   const [metric, setMetric] = useState<ImpactMetric>('volume');
   const [selectedRunPrefix, setSelectedRunPrefix] = useState<string | null>(null);
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
@@ -140,10 +143,9 @@ export default function App() {
   const filtered = useMemo(() => applyFilters(runs, filters), [runs, filters]);
   const trendPoints = useMemo(() => trend(filtered), [filtered]);
   const delta = useMemo(() => deltaFromPrevious(filtered), [filtered]);
-  const areas = useMemo(() => areaImpact(filtered, groupBy), [filtered, groupBy]);
-  const grid = useMemo(() => heatmap(filtered, groupBy), [filtered, groupBy]);
+  const areas = useMemo(() => areaImpact(filtered, GROUP_BY), [filtered]);
+  const grid = useMemo(() => heatmap(filtered, GROUP_BY), [filtered]);
   const clusters = useMemo(() => mergeClusters(filtered), [filtered]);
-  const flaky = useMemo(() => flakyTests(filtered), [filtered]);
 
   // The run whose detail panel is shown — the newest unless one was clicked.
   const selectedRun = useMemo(
@@ -230,16 +232,40 @@ export default function App() {
 
   return (
     <div className="app">
+      {/*
+        One bar: identity, scope controls, and view controls. Previously this was a
+        title block stacked on a separate filter card, which spent two rows and a
+        border on four dropdowns.
+      */}
       <header className="topbar">
-        <div>
+        <div className="brand">
           <h1>QA Automation Dashboard</h1>
-          <div className="sub">
-            {int(runs.length)} runs loaded
-            {load.method === 'index' && ' via static index'} · newest{' '}
-            {relativeTime(runs[0]?.finishedAt ?? null)}
-          </div>
+          <p className="brand-meta">
+            <strong>{filters.workflow || 'all suites'}</strong>
+            <span className="sep" aria-hidden="true">
+              ·
+            </span>
+            {int(filtered.length)} of {int(runs.length)} runs
+            <span className="sep" aria-hidden="true">
+              ·
+            </span>
+            updated {relativeTime(runs[0]?.finishedAt ?? null)}
+            {load.method === 'index' && (
+              <>
+                <span className="sep" aria-hidden="true">
+                  ·
+                </span>
+                static index
+              </>
+            )}
+          </p>
         </div>
-        <div className="topbar-actions">
+
+        <div className="topbar-controls">
+          <Filters filters={filters} onChange={setFilters} facets={allFacets} />
+
+          <div className="topbar-divider" aria-hidden="true" />
+
           <div className="segmented" role="group" aria-label="Theme">
             {(['light', 'system', 'dark'] as Theme[]).map((option) => (
               <button
@@ -252,20 +278,16 @@ export default function App() {
               </button>
             ))}
           </div>
-          <button className="btn" onClick={() => config && void refresh(config)}>
-            Refresh
+          <button
+            className="btn icon-btn"
+            title="Reload from S3"
+            onClick={() => config && void refresh(config)}
+          >
+            <span aria-hidden="true">↻</span>
+            <span className="visually-hidden">Refresh</span>
           </button>
         </div>
       </header>
-
-      <Filters
-        filters={filters}
-        onChange={setFilters}
-        groupBy={groupBy}
-        onGroupByChange={setGroupBy}
-        facets={allFacets}
-        runCount={filtered.length}
-      />
 
       {!latest ? (
         <div className="state" style={{ marginTop: 20 }}>
@@ -295,9 +317,8 @@ export default function App() {
                 <h2>Outcome mix per run</h2>
               </div>
               <p className="card-sub">
-                Executed tests and how they landed. Tag-filtered runs report the whole suite with
-                non-matching scenarios skipped, so switch to <em>+ skipped</em> to see total suite
-                size — and to catch a pass rate that rose because more was skipped.
+                Executed tests and how they landed. <em>+ skipped</em> shows the whole suite —
+                useful to catch a pass rate that rose because more was skipped.
               </p>
               <VolumeChart points={trendPoints} />
             </div>
@@ -329,17 +350,13 @@ export default function App() {
                   ? 'Where failures landed across the whole window. Large areas dominate simply by being large — switch to fail rate to normalise.'
                   : 'How bad each area is for its size. A small area can top this chart on a handful of tests — check the volume view before acting.'}{' '}
                 Click a bar to filter the failures table.
-                {groupBy === 'tag' && (
-                  <>
-                    {' '}
-                    <strong>
-                      A scenario carries several tags, so these rows overlap and do not sum to the
-                      run total.
-                    </strong>{' '}
-                    Scope (@smoke), layer (@ui) and traceability tags (@C22747, @CAR-1234) are
-                    excluded.
-                  </>
-                )}
+{' '}
+                <strong>
+                  A scenario carries several tags, so these rows overlap and do not sum to the run
+                  total.
+                </strong>{' '}
+                Scope (@smoke), layer (@ui) and traceability tags (@C22747, @CAR-1234) are
+                excluded.
               </p>
               <AreaImpactChart
                 areas={areas}
@@ -394,52 +411,42 @@ export default function App() {
           <section className="block">
             <div className="card">
               <div className="card-head">
-                <h2>Is it a regression or a flake?</h2>
-                <span className="hint">{GROUP_LABELS[groupBy]} × run</span>
+                <h2>Persistent or one-off?</h2>
+                <span className="hint">{GROUP_LABEL} × run</span>
               </div>
               <p className="card-sub">
-                A solid horizontal band means an area has been failing every run — someone owns that.
-                Scattered cells mean instability. Click a cell to jump to that run.
+                A solid horizontal band means an area has failed in every run — that is a
+                regression someone owns. Scattered cells mean intermittent failures. Click a cell to
+                jump to that run.
               </p>
               <AreaHeatmap rows={grid.rows} runs={grid.runs} onSelectRun={setSelectedRunPrefix} />
-            </div>
-          </section>
-
-          <section className="block grid cols-2">
-            <div className="card">
-              <div className="card-head">
-                <h2>Top failure reasons</h2>
-                <span className="hint">grouped by error signature</span>
-              </div>
-              <p className="card-sub">
-                IDs, timestamps and quoted values are normalised, so one root cause is one row.
-              </p>
-              <ClustersTable clusters={clusters} />
-            </div>
-
-            <div className="card">
-              <div className="card-head">
-                <h2>Flakiest tests</h2>
-                <span className="hint">ranked by verdict changes</span>
-              </div>
-              <p className="card-sub">
-                Tests that flip between pass and fail. A test failing every run is a defect, not a
-                flake, and is excluded here.
-              </p>
-              <FlakyTable tests={flaky} />
             </div>
           </section>
 
           <section className="block">
             <div className="card">
               <div className="card-head">
-                <h2>{GROUP_LABELS[groupBy]} breakdown</h2>
+                <h2>Top failure reasons</h2>
+                <span className="hint">grouped by error signature</span>
+              </div>
+              <p className="card-sub">
+                IDs, timestamps and quoted values are normalised, so one root cause is one row
+                rather than one row per affected test.
+              </p>
+              <ClustersTable clusters={clusters} />
+            </div>
+          </section>
+
+          <section className="block">
+            <div className="card">
+              <div className="card-head">
+                <h2>{GROUP_LABEL} breakdown</h2>
                 <span className="hint">all {areas.length} areas</span>
               </div>
               <p className="card-sub">
                 The full table behind the chart above, including areas with no failures.
               </p>
-              <AreaTable areas={areas} groupLabel={GROUP_LABELS[groupBy]} />
+              <AreaTable areas={areas} groupLabel={GROUP_LABEL} />
             </div>
           </section>
 

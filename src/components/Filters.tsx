@@ -1,13 +1,13 @@
 /**
- * One filter row above the charts, per the composition rule — never per-chart
- * controls scattered through the page.
+ * The filter controls, rendered inline in the top bar.
  *
- * Every control narrows the run set that all charts read from, so the whole
- * dashboard always describes one coherent slice.
+ * Every control narrows the run set that all the charts read from, so the whole
+ * page always describes one coherent slice. They live in one row rather than
+ * per-chart, and there is no separate filter card — with the grouping toggle gone
+ * there are few enough controls to sit beside the title.
  */
 
 import type { Filters as FilterState } from '../lib/aggregate';
-import type { GroupBy } from '../types';
 
 interface Facet {
   value: string;
@@ -18,14 +18,11 @@ interface Facet {
 interface Props {
   filters: FilterState;
   onChange: (next: FilterState) => void;
-  groupBy: GroupBy;
-  onGroupByChange: (next: GroupBy) => void;
   facets: {
     workflows: Facet[];
     environments: Facet[];
     branches: Facet[];
   };
-  runCount: number;
 }
 
 const RANGES = [
@@ -33,13 +30,6 @@ const RANGES = [
   { value: 30, label: 'Last 30 days' },
   { value: 90, label: 'Last 90 days' },
   { value: 0, label: 'All time' },
-];
-
-const GROUP_OPTIONS: { value: GroupBy; label: string; hint: string }[] = [
-  { value: 'domain', label: 'Risk domain', hint: 'Behave tags folded into tag_map.yaml business areas — one bucket per scenario' },
-  { value: 'tag', label: 'Tag', hint: 'Raw behave tags — a scenario appears under each of its tags, so rows overlap' },
-  { value: 'suite', label: 'Feature', hint: 'The Feature the scenario belongs to' },
-  { value: 'layer', label: 'Layer', hint: 'API / UI / E2E tags' },
 ];
 
 function Select({
@@ -66,9 +56,9 @@ function Select({
   if (!alwaysShow && options.length < 2 && !value) return null;
 
   return (
-    <div className="field">
-      <label htmlFor={`filter-${label}`}>{label}</label>
-      <select id={`filter-${label}`} value={value} onChange={(event) => onChange(event.target.value)}>
+    <label className="control">
+      <span className="control-label">{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">{allLabel}</option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -76,22 +66,13 @@ function Select({
           </option>
         ))}
       </select>
-    </div>
+    </label>
   );
 }
 
-export function Filters({
-  filters,
-  onChange,
-  groupBy,
-  onGroupByChange,
-  facets,
-  runCount,
-}: Props) {
-  const groupHint = GROUP_OPTIONS.find((option) => option.value === groupBy)?.hint;
-
+export function Filters({ filters, onChange, facets }: Props) {
   return (
-    <div className="filters">
+    <>
       <Select
         label="Suite"
         value={filters.workflow}
@@ -115,10 +96,9 @@ export function Filters({
         allLabel="All branches"
       />
 
-      <div className="field">
-        <label htmlFor="filter-range">Time range</label>
+      <label className="control">
+        <span className="control-label">Range</span>
         <select
-          id="filter-range"
           value={filters.days}
           onChange={(event) => onChange({ ...filters, days: Number(event.target.value) })}
         >
@@ -128,35 +108,7 @@ export function Filters({
             </option>
           ))}
         </select>
-      </div>
-
-      <div className="field">
-        <label>Group areas by</label>
-        <div className="segmented" role="group" aria-label="Group areas by">
-          {GROUP_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={groupBy === option.value}
-              title={option.hint}
-              onClick={() => onGroupByChange(option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="field" style={{ marginLeft: 'auto', alignItems: 'flex-end' }}>
-        <span className="dim" style={{ fontSize: 12 }}>
-          {runCount} run{runCount === 1 ? '' : 's'} in view
-        </span>
-        {groupHint && (
-          <span className="dim" style={{ fontSize: 11 }}>
-            {groupHint}
-          </span>
-        )}
-      </div>
-    </div>
+      </label>
+    </>
   );
 }
