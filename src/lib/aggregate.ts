@@ -17,7 +17,12 @@ export interface Filters {
   days: number; // 0 = all time
 }
 
-export const DEFAULT_FILTERS: Filters = { workflow: '', environment: '', branch: '', days: 30 };
+/**
+ * `days: 0` = no time filtering. Discovery already bounds the set to the newest
+ * `maxRunsPerWorkflow` runs per suite, so this shows everything published rather
+ * than everything ever.
+ */
+export const DEFAULT_FILTERS: Filters = { workflow: '', environment: '', branch: '', days: 0 };
 
 /**
  * Oldest-first ordering.

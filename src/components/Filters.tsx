@@ -1,10 +1,14 @@
 /**
  * The filter controls, rendered inline in the top bar.
  *
- * Every control narrows the run set that all the charts read from, so the whole
- * page always describes one coherent slice. They live in one row rather than
- * per-chart, and there is no separate filter card — with the grouping toggle gone
- * there are few enough controls to sit beside the title.
+ * Suite is the only scope control. The time-range selector was dropped with it:
+ * discovery already caps each suite at `maxRunsPerWorkflow` most-recent runs, so
+ * "everything published" is a bounded set, and with only a handful of runs per
+ * suite a 30-day default silently hid some of them.
+ *
+ * Environment and branch render only if Allure carries them, which needs an
+ * environment.properties CI does not currently write — so in practice this is a
+ * single dropdown.
  */
 
 import type { Filters as FilterState } from '../lib/aggregate';
@@ -24,13 +28,6 @@ interface Props {
     branches: Facet[];
   };
 }
-
-const RANGES = [
-  { value: 7, label: 'Last 7 days' },
-  { value: 30, label: 'Last 30 days' },
-  { value: 90, label: 'Last 90 days' },
-  { value: 0, label: 'All time' },
-];
 
 function Select({
   label,
@@ -95,20 +92,6 @@ export function Filters({ filters, onChange, facets }: Props) {
         onChange={(branch) => onChange({ ...filters, branch })}
         allLabel="All branches"
       />
-
-      <label className="control">
-        <span className="control-label">Range</span>
-        <select
-          value={filters.days}
-          onChange={(event) => onChange({ ...filters, days: Number(event.target.value) })}
-        >
-          {RANGES.map((range) => (
-            <option key={range.value} value={range.value}>
-              {range.label}
-            </option>
-          ))}
-        </select>
-      </label>
     </>
   );
 }
