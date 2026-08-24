@@ -95,12 +95,18 @@ class AreaTagFilter {
     ]);
     // tag_map writes these uppercase; tags arrive lowercased, so match loosely.
     this.nonRouting = (domainMap.nonRoutingPatterns ?? []).map((p) => new RegExp(p, 'i'));
+    // Broader variants of the same conventions seen in real runs: auth roles
+    // beyond tag_map's enumerated list (@auth.admin_exception_manager), Linear
+    // refs with a case suffix (@CAR-2981_TC08), lettered local case numbering
+    // (@TC-EWB-002). `@auth` alone stays an area — it is a real domain.
+    this.variants = [/^auth\./i, /^car-\d+/i, /^tc-/i, /^c_[a-z0-9_]+$/i];
   }
 
   isArea(tag) {
     const t = String(tag).toLowerCase();
     if (!t || this.bookkeeping.has(t)) return false;
-    return !this.nonRouting.some((re) => re.test(t));
+    if (this.nonRouting.some((re) => re.test(t))) return false;
+    return !this.variants.some((re) => re.test(t));
   }
 }
 

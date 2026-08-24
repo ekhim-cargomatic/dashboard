@@ -76,6 +76,30 @@ export function resolveDomains(tags: readonly string[]): DomainMatch {
  * case-insensitively: tag_map writes them uppercase, tags arrive lowercased.
  */
 const NON_ROUTING = NON_ROUTING_PATTERNS.map((pattern) => new RegExp(pattern, 'i'));
+
+/**
+ * Broader variants of the same conventions, found in real published runs.
+ *
+ * tag_map declares the canonical forms, but the feature files have drifted past
+ * them and the dashboard should not wait for tag_map to catch up:
+ *
+ *   @auth.admin_exception_manager  an auth role absent from tag_map's auth_roles,
+ *                                  and it ranked 3rd by failures — shadowing
+ *                                  @exceptions, which is the real area
+ *   @CAR-2981_TC08                 a Linear ref with a case suffix, so it misses
+ *                                  the anchored ^CAR-[0-9]+$
+ *   @TC-EWB-002                    lettered local case numbering, missing ^TC-[0-9]+$
+ *
+ * Anchoring on the prefix instead of the exact form keeps new instances out
+ * automatically. `@auth` itself is deliberately still an area — it is a real
+ * domain in tag_map; only the dotted role selectors are excluded.
+ */
+const NON_ROUTING_VARIANTS = [
+  /^auth\./i,
+  /^car-\d+/i,
+  /^tc-/i,
+  /^c_[a-z0-9_]+$/i,
+];
 const BOOKKEEPING = new Set<string>([
   ...SCOPE_TAGS,
   ...LAYER_TAGS,
@@ -86,7 +110,8 @@ const BOOKKEEPING = new Set<string>([
 export function isAreaTag(tag: string): boolean {
   const normalised = tag.toLowerCase();
   if (!normalised || BOOKKEEPING.has(normalised)) return false;
-  return !NON_ROUTING.some((pattern) => pattern.test(normalised));
+  if (NON_ROUTING.some((pattern) => pattern.test(normalised))) return false;
+  return !NON_ROUTING_VARIANTS.some((pattern) => pattern.test(normalised));
 }
 
 /** Layer tags are descriptive, not routing — pulled out separately. */

@@ -231,8 +231,53 @@ export async function discoverRuns(config: AppConfig): Promise<{
 /**
  * Run data is immutable once written, so it is cached in sessionStorage. Only the
  * newest run changes between visits; everything older is a free hit.
+ *
+ * BUMP THIS whenever RunSummary gains a field the UI reads. A cache entry written
+ * by an older build parses fine but is missing the new field, and the dashboard
+ * then renders it as *absent data* rather than as a cache miss — which is exactly
+ * how a returning visitor ended up with an empty "most affected areas" while the
+ * failures table beside it listed 402 failures.
  */
+const CACHE_VERSION = 3;
+
+/**
+ * Reject a cache entry that predates a field the current build needs.
+ *
+ * The version bump above is the primary guard; this is the backstop for when
+ * someone forgets it. Better a redundant fetch than a silently half-empty page.
+ */
+function isUsableCacheEntry(value: unknown): value is RunSummary {
+  const run = value as RunSummary | null;
+  return (
+    !!run &&
+    typeof run === 'object' &&
+    !!run.totals &&
+    Array.isArray(run.domains) &&
+    Array.isArray(run.tags) &&
+    Array.isArray(run.suites) &&
+    Array.isArray(run.layers) &&
+    Array.isArray(run.severities) &&
+    Array.isArray(run.failures)
+  );
+}
+
 const memoryCache = new Map<string, RunSummary>();
+
+/**
+ * Drop entries written by older builds. Without this they sit in sessionStorage
+ * unread until they push the quota over and start rejecting current writes.
+ */
+function evictStaleCacheVersions(): void {
+  const current = `qa-run:v${CACHE_VERSION}:`;
+  try {
+    for (const key of Object.keys(sessionStorage)) {
+      if (key.startsWith('qa-run:') && !key.startsWith(current)) sessionStorage.removeItem(key);
+    }
+  } catch {
+    // sessionStorage unavailable (private mode, disabled) — nothing to evict.
+  }
+}
+evictStaleCacheVersions();
 
 function readCache(key: string): RunSummary | null {
   const cached = memoryCache.get(key);
@@ -240,7 +285,11 @@ function readCache(key: string): RunSummary | null {
   try {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as RunSummary;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isUsableCacheEntry(parsed)) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
     memoryCache.set(key, parsed);
     return parsed;
   } catch {
@@ -271,7 +320,7 @@ export async function fetchRunSummary(
   config: AppConfig,
   ref: RunRef,
 ): Promise<RunSummary | null> {
-  const cacheKey = `qa-run:v2:${ref.prefix}`;
+  const cacheKey = `qa-run:v${CACHE_VERSION}:${ref.prefix}`;
   const cached = readCache(cacheKey);
   if (cached) return cached;
 
