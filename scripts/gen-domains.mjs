@@ -97,6 +97,7 @@ function build(tagMapPath) {
     layers: (raw.layers ?? []).map(stripAt),
     excludeAlways: (raw.exclude_always ?? []).map(stripAt),
     scopes: Object.keys(raw.scopes ?? {}),
+    authRoles: (raw.auth_roles ?? []).map(stripAt),
     nonRoutingPatterns: nonRouting,
   };
 }
@@ -131,6 +132,9 @@ export const SCOPE_TAGS: string[] = ${JSON.stringify(data.scopes)};
 
 /** Always-excluded gates (@wip, @bug, @skip …). */
 export const EXCLUDE_TAGS: string[] = ${JSON.stringify(data.excludeAlways)};
+
+/** Auth-role selectors (@auth.admin …) - they say who logs in, not what is covered. */
+export const AUTH_ROLE_TAGS: string[] = ${JSON.stringify(data.authRoles)};
 
 /**
  * Tags kept only for traceability — case ids, ticket refs, ad-hoc runner tags.

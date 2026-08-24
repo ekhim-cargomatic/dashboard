@@ -7,6 +7,7 @@
  */
 
 import {
+  AUTH_ROLE_TAGS,
   DOMAIN_BY_SLUG,
   EXCLUDE_TAGS,
   LAYER_TAGS,
@@ -66,6 +67,8 @@ export function resolveDomains(tags: readonly string[]): DomainMatch {
  *   scope      @smoke, @regression      every test in the run has one
  *   layer      @ui, @api, @e2e          already its own grouping
  *   gates      @wip, @bug, @skip        execution control
+ *   auth role  @auth.admin              who logs in, not what is covered — and in
+ *                                       practice it shadows @admin exactly
  *   trace ids  @C22747, @CAR-1234       one tag per test, so one row per test
  *
  * The trace-id patterns come from tag_map's own non_routing section rather than
@@ -73,7 +76,12 @@ export function resolveDomains(tags: readonly string[]): DomainMatch {
  * case-insensitively: tag_map writes them uppercase, tags arrive lowercased.
  */
 const NON_ROUTING = NON_ROUTING_PATTERNS.map((pattern) => new RegExp(pattern, 'i'));
-const BOOKKEEPING = new Set<string>([...SCOPE_TAGS, ...LAYER_TAGS, ...EXCLUDE_TAGS]);
+const BOOKKEEPING = new Set<string>([
+  ...SCOPE_TAGS,
+  ...LAYER_TAGS,
+  ...EXCLUDE_TAGS,
+  ...AUTH_ROLE_TAGS,
+]);
 
 export function isAreaTag(tag: string): boolean {
   const normalised = tag.toLowerCase();

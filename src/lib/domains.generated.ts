@@ -746,6 +746,9 @@ export const SCOPE_TAGS: string[] = ["smoke","regression","happy_path"];
 /** Always-excluded gates (@wip, @bug, @skip …). */
 export const EXCLUDE_TAGS: string[] = ["wip","skip","bug","deprecated","dev","prod","cannot-run-since-staging-has-a-12hr-dbt"];
 
+/** Auth-role selectors (@auth.admin …) - they say who logs in, not what is covered. */
+export const AUTH_ROLE_TAGS: string[] = ["auth.admin","auth.admin_billing_admin","auth.admin_billing_manager","auth.admin_lane_rates","auth.admin_without_accessorial_admin","auth.admin_automation","auth.carrier","auth.shipper"];
+
 /**
  * Tags kept only for traceability — case ids, ticket refs, ad-hoc runner tags.
  * Patterns come straight from tag_map's non_routing section.

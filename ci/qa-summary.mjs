@@ -91,6 +91,7 @@ class AreaTagFilter {
       ...(domainMap.scopes ?? []),
       ...(domainMap.layers ?? []),
       ...(domainMap.excludeAlways ?? []),
+      ...(domainMap.authRoles ?? []),
     ]);
     // tag_map writes these uppercase; tags arrive lowercased, so match loosely.
     this.nonRouting = (domainMap.nonRoutingPatterns ?? []).map((p) => new RegExp(p, 'i'));

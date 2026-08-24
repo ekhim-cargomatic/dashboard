@@ -741,6 +741,16 @@
     "regression",
     "happy_path"
   ],
+  "authRoles": [
+    "auth.admin",
+    "auth.admin_billing_admin",
+    "auth.admin_billing_manager",
+    "auth.admin_lane_rates",
+    "auth.admin_without_accessorial_admin",
+    "auth.admin_automation",
+    "auth.carrier",
+    "auth.shipper"
+  ],
   "nonRoutingPatterns": [
     "^C[0-9]+$",
     "^C_[A-Z0-9_]+$",
