@@ -174,9 +174,17 @@ npm install
 ./infra/deploy.sh                # full pass; also reconciles bucket/CDN config
 ```
 
-Both reuse the existing distribution, so **the URL never changes**. `BUCKET`
-defaults to the deployed bucket — overriding it creates a *second* stack on a new
-URL, so leave it alone unless you're moving accounts.
+Both reuse the existing distribution, so **the URL never changes**.
+
+The bucket name embeds the AWS account id and this repo is public, so it lives in
+an untracked `infra/deploy.env`:
+
+```
+BUCKET=cargomatic-qa-dashboard-<account-id>
+```
+
+The script errors rather than guessing if that is missing — a wrong name silently
+provisions a *second* stack on a new URL and leaves the original billing.
 
 Provisioning (first run, already done) creates the bucket with a public read +
 `s3:ListBucket` policy scoped to `runs/`, a CORS rule, a 90-day lifecycle rule, the
@@ -226,7 +234,7 @@ skipped.
 Against the real bucket instead:
 
 ```bash
-VITE_S3_ORIGIN=https://cargomatic-qa-dashboard-164621342586.s3.us-west-2.amazonaws.com npm run dev
+VITE_S3_ORIGIN=https://<bucket>.s3.us-west-2.amazonaws.com npm run dev
 ```
 
 ---
@@ -282,6 +290,52 @@ If listing is unavailable, the SPA falls back to an optional `runs/index.json`
 Empty origins mean "same origin". Set `ciRunUrlTemplate` to
 `https://github.com/<org>/playwright-automation/actions/runs/{runId}` to make each
 run link back to its CI job.
+
+---
+
+## Feature flags
+
+Off by default. Enable for one browser via the URL, which is then remembered so a
+work-in-progress section can be shared by link without shipping it to everyone:
+
+```
+?ff=training      turn on
+?ff=-training     turn off
+?ff=              clear all overrides
+```
+
+`config.json` can also set defaults (`{"flags": {"training": true}}`) to promote a
+flag without a rebuild.
+
+**A flag hides UI; it does not hide data.** Anything flagged code fetches is still
+fetchable by anyone, and anything bundled is readable in the JS. A flagged feature
+whose *data* must stay private has to keep that data out of the deployed bundle
+and the bucket — see below.
+
+### `training` — Training & SOP coverage
+
+Reads the Command training matrix and reports which lifecycle steps, personas and
+owners have material that is stale, undated, or carrying a note that says
+something other than "complete".
+
+The matrix names process owners, links internal documents and records candid notes
+about business gaps. **This repository is public and the dashboard bucket is
+public**, so the data is neither committed nor deployed:
+
+- it lives untracked at `data/training-sop-matrix.csv` (`data/` is gitignored)
+- a **dev-only** Vite middleware serves it at `/__training-matrix.csv`
+- production builds have no such endpoint, and the panel explains why
+
+Do not move the CSV into `public/`. That would publish it to anyone with the
+dashboard URL, and the feature flag would not prevent it. Verify with:
+
+```bash
+npm run build
+grep -rl "drive.last_updated\|Process Owner" dist/     # must match nothing but sourcemaps
+```
+
+To use it locally: drop the sheet at `data/training-sop-matrix.csv`, `npm run dev`,
+open `http://localhost:5173/?ff=training`.
 
 ---
 

@@ -13,6 +13,8 @@ import {
 import { loadConfig } from './lib/config';
 import { discoverRuns, fetchRunSummaries } from './lib/s3';
 import { enrichWithFailureDetail } from './lib/allure';
+import { resolveFlags, type FlagName } from './lib/flags';
+import { TrainingPanel } from './components/TrainingPanel';
 import { int, relativeTime } from './lib/format';
 import { AreaHeatmap } from './components/AreaHeatmap';
 import { AreaImpactChart, type ImpactMetric } from './components/AreaImpactChart';
@@ -58,6 +60,8 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem('qa-theme') as Theme) ?? 'system',
   );
+  // Resolved once: the URL override is consumed and persisted on first render.
+  const [flags] = useState<Record<FlagName, boolean>>(() => resolveFlags());
 
   useEffect(() => {
     if (theme === 'system') document.documentElement.removeAttribute('data-theme');
@@ -288,6 +292,12 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {flags.training && (
+        <section className="block">
+          <TrainingPanel />
+        </section>
+      )}
 
       {!latest ? (
         <div className="state" style={{ marginTop: 20 }}>

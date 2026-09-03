@@ -7,3 +7,9 @@ dist/
 # Local fixture data — regenerate with `npm run fixtures`
 public/runs/
 public/config.json
+
+# Untracked: embeds the AWS account id, and this repo is public
+infra/deploy.env
+
+# Untracked: internal training matrix (named owners, internal doc links) — repo is public
+data/

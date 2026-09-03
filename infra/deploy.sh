@@ -18,11 +18,21 @@
 
 set -euo pipefail
 
-# This default must match the deployed bucket exactly. The distribution is found
-# by its Comment, which is derived from BUCKET below — so a different bucket name
-# finds no distribution and creates a *second* one, on a new CloudFront URL, while
-# the original keeps running and billing. Change it only when moving accounts.
-BUCKET="${BUCKET:-cargomatic-qa-dashboard-164621342586}"
+# The bucket name embeds the AWS account id, and this repo is public, so it lives
+# in an untracked infra/deploy.env rather than here:
+#
+#     BUCKET=cargomatic-qa-dashboard-<account-id>
+#
+# It must match the deployed bucket exactly. The distribution is found by its
+# Comment, which is derived from BUCKET below — so a different name finds no
+# distribution and creates a *second* one, on a new CloudFront URL, while the
+# original keeps running and billing. That is why an absent value is a hard error
+# rather than a plausible-looking default.
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/deploy.env" ]]; then
+  # shellcheck disable=SC1091
+  source "$(dirname "${BASH_SOURCE[0]}")/deploy.env"
+fi
+BUCKET="${BUCKET:-}"
 REGION="${REGION:-us-west-2}"
 RUNS_PREFIX="${RUNS_PREFIX:-runs/}"
 MAX_RUNS_PER_WORKFLOW="${MAX_RUNS_PER_WORKFLOW:-60}"
@@ -34,6 +44,23 @@ APP_ONLY=false
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$HERE")"
+
+if [[ -z "$BUCKET" ]]; then
+  cat >&2 <<'ERR'
+error: BUCKET is not set.
+
+  Create infra/deploy.env (untracked) containing:
+
+      BUCKET=cargomatic-qa-dashboard-<account-id>
+
+  Find the account id with: aws sts get-caller-identity --query Account --output text
+  Or pass it for one run:   BUCKET=... ./infra/deploy.sh --app-only
+
+Deliberately not defaulted: a wrong name silently provisions a SECOND stack on a
+new CloudFront URL and leaves the original running and billing.
+ERR
+  exit 1
+fi
 
 for tool in aws node npm jq; do
   command -v "$tool" >/dev/null || { echo "error: $tool is required but not installed" >&2; exit 1; }

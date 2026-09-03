@@ -35,11 +35,15 @@ Stack: Vite + React + TypeScript, zero chart dependencies. Node 20+.
 
 ## AWS environment
 
+> This repo is public. The concrete account id and SSO URL are deliberately not
+> written down here — read them from the machine you are working on, or ask the
+> team. Everything below works from those two values.
+
 | | |
 |---|---|
-| Account | **164621342586** — "Cargomatic Dev" |
+| Account | `<ACCOUNT_ID>` — the "Dev" account; `aws sts get-caller-identity` after login |
 | Region | **us-west-2** |
-| SSO start URL | https://cargomatic.awsapps.com/start |
+| SSO start URL | in `~/.aws/config` under `[sso-session …] sso_start_url` |
 | Role | `AdministratorAccess` |
 | Local profile | `default` (already configured in `~/.aws/config`) |
 
@@ -66,8 +70,8 @@ or the dashboard itself.
 
 | Resource | Value |
 |---|---|
-| S3 bucket | `cargomatic-perf-dashboard-164621342586` |
-| CloudFront distribution | new; comment `perf-dashboard-cargomatic-perf-dashboard-164621342586` |
+| S3 bucket | `cargomatic-perf-dashboard-<ACCOUNT_ID>` |
+| CloudFront distribution | new; comment `perf-dashboard-cargomatic-perf-dashboard-<ACCOUNT_ID>` |
 | CloudFront Function | `perf-dashboard-router` |
 | Cache policy | `perf-dashboard-cache` |
 
