@@ -180,7 +180,7 @@ export function TrainingPanel() {
 {`To view it locally:
   1. place the sheet at  data/training-sop-matrix.csv   (already gitignored)
   2. npm run dev
-  3. open  http://localhost:5173/?ff=training`}
+  3. open  http://localhost:5173/?ff=training-on`}
         </pre>
       </div>
     );

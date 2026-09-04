@@ -456,13 +456,27 @@ button.btn:focus-visible,
   }
 }
 
+/*
+ * Grid rows stretch every tile to the tallest one, and the hero tile is tallest
+ * because of its sparkline. Left alone, the shorter tiles ended their content at
+ * the top and left a dead block of whitespace underneath. Making the tile a
+ * column and anchoring the meta line to the bottom spreads that slack instead of
+ * pooling it, so the row reads as one band.
+ */
 .tile {
+  display: flex;
+  flex-direction: column;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 16px;
   box-shadow: var(--shadow);
   min-width: 0;
+}
+
+.tile .tile-meta {
+  margin-top: auto;
+  padding-top: 4px;
 }
 
 .tile .tile-label {
@@ -488,7 +502,6 @@ button.btn:focus-visible,
 .tile .tile-meta {
   font-size: 12px;
   color: var(--text-secondary);
-  margin-top: 4px;
 }
 
 .delta {

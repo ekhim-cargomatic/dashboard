@@ -299,10 +299,14 @@ Off by default. Enable for one browser via the URL, which is then remembered so 
 work-in-progress section can be shared by link without shipping it to everyone:
 
 ```
-?ff=training      turn on
-?ff=-training     turn off
-?ff=              clear all overrides
+?ff=training-on     turn on
+?ff=training-off    turn off
+?ff=                clear all overrides
 ```
+
+`training`, `-training`, `!training`, `training:on` and `training=on` are accepted
+too — silently ignoring the spelling someone reaches for makes the flag look
+broken. Multiple flags can be comma- or space-separated.
 
 `config.json` can also set defaults (`{"flags": {"training": true}}`) to promote a
 flag without a rebuild.
@@ -335,7 +339,7 @@ grep -rl "drive.last_updated\|Process Owner" dist/     # must match nothing but 
 ```
 
 To use it locally: drop the sheet at `data/training-sop-matrix.csv`, `npm run dev`,
-open `http://localhost:5173/?ff=training`.
+open `http://localhost:5173/?ff=training-on`.
 
 ---
 

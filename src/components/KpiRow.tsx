@@ -8,7 +8,7 @@
  */
 
 import type { Delta, TrendPoint } from '../lib/aggregate';
-import { duration, int, pct, pp, relativeTime } from '../lib/format';
+import { dateTime, duration, int, pct, pp, relativeTime } from '../lib/format';
 import type { RunSummary } from '../types';
 
 interface Props {
@@ -43,7 +43,7 @@ function Sparkline({ points }: { points: TrendPoint[] }) {
   if (points.length < 2) return null;
 
   const width = 168;
-  const height = 34;
+  const height = 30;
   const values = points.map((p) => p.passRate);
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -173,13 +173,19 @@ export function KpiRow({ latest, delta, trendPoints }: Props) {
         }
       />
 
+      {/*
+        Environment and branch are usually blank — Allure only carries them if CI
+        writes an environment.properties. Falling back to the absolute timestamp
+        keeps the tile informative instead of leaving it visibly empty next to its
+        neighbours.
+      */}
       <Tile
         label="Finished"
         value={relativeTime(latest.finishedAt)}
         meta={
           <span className="dim">
-            {latest.environment}
-            {latest.branch ? ` · ${latest.branch}` : ''}
+            {[latest.environment, latest.branch].filter(Boolean).join(' · ') ||
+              dateTime(latest.finishedAt)}
           </span>
         }
       />
