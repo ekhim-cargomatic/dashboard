@@ -1,0 +1,577 @@
+<title>Command Suite Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;450;500;600&display=swap">
+
+<style>
+  :root{
+    color-scheme: light;
+    --ground:#f4f7f7; --surface:#ffffff; --surface-2:#eaf0f1; --surface-3:#dde6e8;
+    --ink:#0f1a1d; --ink-soft:#465a61; --ink-faint:#7a8d94;
+    --line:#d8e2e4; --line-soft:#e7eef0;
+    --accent:#0d8b87; --accent-ink:#076663; --accent-wash:#dff0ef;
+    --admin:#5a6ee0; --api:#69798a; --carrier:#0d8b87; --shipper:#9166d4;
+    --wip:#b9761a; --settled:#2f8f5b;
+    --node-stroke:#ffffff;
+    --shadow:0 1px 2px rgba(15,26,29,.05), 0 10px 28px -16px rgba(15,26,29,.28);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --ground:#0c1416; --surface:#141e21; --surface-2:#1b272b; --surface-3:#243237;
+      --ink:#e4eef0; --ink-soft:#93a7ad; --ink-faint:#63767d;
+      --line:#25343a; --line-soft:#1d292e;
+      --accent:#34cfc6; --accent-ink:#7fe6df; --accent-wash:#10322f;
+      --admin:#8b9cff; --api:#9aabb8; --carrier:#34cfc6; --shipper:#c295ef;
+      --wip:#e5a63f; --settled:#4ec27c;
+      --node-stroke:#0c1416;
+      --shadow:0 1px 2px rgba(0,0,0,.45), 0 12px 32px -18px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --ground:#0c1416; --surface:#141e21; --surface-2:#1b272b; --surface-3:#243237;
+    --ink:#e4eef0; --ink-soft:#93a7ad; --ink-faint:#63767d;
+    --line:#25343a; --line-soft:#1d292e;
+    --accent:#34cfc6; --accent-ink:#7fe6df; --accent-wash:#10322f;
+    --admin:#8b9cff; --api:#9aabb8; --carrier:#34cfc6; --shipper:#c295ef;
+    --wip:#e5a63f; --settled:#4ec27c;
+    --node-stroke:#0c1416;
+    --shadow:0 1px 2px rgba(0,0,0,.45), 0 12px 32px -18px rgba(0,0,0,.8);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+    font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+  .wrap{max-width:1240px; margin:0 auto; padding:34px 24px 72px}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:5px}
+  @media (prefers-reduced-motion:reduce){ *{transition:none !important; animation:none !important} }
+
+  /* masthead */
+  .masthead{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:20px; margin-bottom:24px}
+  .brand{display:flex; align-items:center; gap:15px}
+  h1{
+    font-family:"IBM Plex Sans Condensed",sans-serif; font-weight:700; font-size:32px;
+    letter-spacing:-.012em; margin:0; line-height:1.02; text-wrap:balance;
+  }
+  .tagline{color:var(--ink-soft); font-size:14px; margin-top:4px; max-width:56ch}
+  .stamp{font-size:12px; color:var(--ink-faint); letter-spacing:.02em; text-align:right}
+  .stamp b{color:var(--ink-soft); font-weight:500}
+
+  /* stat strip */
+  .stats{display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:22px}
+  .stat{background:var(--surface); border:1px solid var(--line); border-radius:13px; padding:14px 15px; box-shadow:var(--shadow)}
+  .stat .num{
+    font-family:"IBM Plex Sans Condensed",sans-serif; font-weight:700; font-size:30px;
+    line-height:1; letter-spacing:-.01em; font-variant-numeric:tabular-nums;
+  }
+  .stat .lbl{font-size:11px; letter-spacing:.085em; text-transform:uppercase; color:var(--ink-faint); margin-top:8px; font-weight:600}
+  .stat.is-accent .num{color:var(--accent-ink)}
+  .stat.is-wip .num{color:var(--wip)}
+
+  /* board */
+  .board{display:grid; grid-template-columns:1.55fr 1fr; gap:20px; align-items:start}
+  .panel{background:var(--surface); border:1px solid var(--line); border-radius:17px; box-shadow:var(--shadow)}
+  .panel-hd{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 18px; border-bottom:1px solid var(--line-soft)}
+  .panel-hd h2{font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; margin:0}
+  .hd-note{font-size:12px; color:var(--ink-faint)}
+
+  .search{display:flex; align-items:center; gap:8px; background:var(--surface-2); border:1px solid var(--line); border-radius:9px; padding:5px 10px; min-width:200px}
+  .search input{border:0; background:transparent; color:inherit; font:inherit; font-size:13px; outline:none; width:100%}
+  .search svg{flex:none; color:var(--ink-faint)}
+
+  /* graph */
+  .graph-wrap{position:relative}
+  #graph{display:block; width:100%; height:auto; touch-action:manipulation}
+  .node{cursor:pointer}
+  .node circle.body{stroke:var(--node-stroke); stroke-width:1.5; transition:opacity .16s}
+  .node circle.group{fill-opacity:.09; stroke:currentColor; stroke-opacity:.28; stroke-width:1.2}
+  .node.hub{color:var(--ink-faint)}
+  .node.hub text{fill:var(--ink-soft); font-size:12px; letter-spacing:.01em}
+  .node .halo{fill:none; stroke:var(--accent); stroke-width:2.5; opacity:0}
+  .node.sel .halo{opacity:1}
+  .node.dim{opacity:.14}
+  .node text{font-family:"IBM Plex Sans",sans-serif; fill:var(--ink); pointer-events:none}
+  .node.hub text{font-family:"IBM Plex Sans Condensed",sans-serif; font-weight:700}
+  .wip-arc{fill:none; stroke:var(--wip); stroke-width:3; stroke-linecap:round}
+  .tip{
+    position:absolute; pointer-events:none; z-index:6; background:var(--ink); color:var(--ground);
+    font-size:12px; padding:7px 10px; border-radius:8px; opacity:0; transition:opacity .12s;
+    white-space:nowrap; box-shadow:var(--shadow); transform:translate(-50%,-130%);
+  }
+  .tip .t-n{font-weight:600}
+  .tip .t-m{opacity:.78; font-size:11px}
+  .legend{display:flex; flex-wrap:wrap; gap:12px 18px; padding:12px 18px; border-top:1px solid var(--line-soft)}
+  .lg{display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ink-soft)}
+  .lg .dot{width:11px; height:11px; border-radius:50%; flex:none}
+  .lg .bar{width:14px; height:3px; border-radius:2px; background:var(--wip); flex:none}
+
+  /* inspector */
+  .insp{padding:16px 18px; min-height:520px; max-height:610px; overflow-y:auto}
+  .eyebrow{font-size:11px; letter-spacing:.09em; text-transform:uppercase; font-weight:600; color:var(--accent-ink)}
+  .insp h3{font-family:"IBM Plex Sans Condensed",sans-serif; font-weight:700; font-size:23px; margin:5px 0 3px; letter-spacing:-.01em; word-break:break-word}
+  .insp .meta{color:var(--ink-soft); font-size:13px; margin-bottom:14px}
+  .backbtn{font-size:12px; color:var(--accent-ink); background:none; border:0; cursor:pointer; padding:0; font-family:inherit; display:inline-flex; align-items:center; gap:5px; margin-bottom:9px}
+  .backbtn:hover{text-decoration:underline}
+
+  .rows{display:flex; flex-direction:column; gap:3px; margin:2px 0 4px}
+  .row{
+    display:grid; grid-template-columns:1fr auto; gap:5px 10px; align-items:center;
+    cursor:pointer; padding:7px 9px; border-radius:9px; transition:background .12s; border:0;
+    background:none; color:inherit; font:inherit; text-align:left; width:100%;
+  }
+  .row:hover{background:var(--surface-2)}
+  .row .rn{font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .row .rv{font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--ink-soft); font-variant-numeric:tabular-nums}
+  .row .track{grid-column:1/3; height:6px; border-radius:3px; background:var(--surface-3); overflow:hidden; display:flex}
+  .track .seg-settled{background:var(--settled)}
+  .track .seg-wip{background:var(--wip)}
+
+  .feat{padding:10px 0; border-top:1px solid var(--line-soft)}
+  .feat:first-of-type{border-top:0}
+  .feat .fn{font-family:"IBM Plex Mono",monospace; font-size:12.5px; word-break:break-word}
+  .feat .ft{color:var(--ink-faint); font-size:12px; margin-top:2px}
+  .fmeta{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; align-items:center}
+  .chip{display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:2px 8px; border-radius:20px; border:1px solid var(--line); color:var(--ink-soft); background:var(--surface-2); font-variant-numeric:tabular-nums}
+  .chip.tk{font-family:"IBM Plex Mono",monospace; border-color:transparent; background:var(--accent-wash); color:var(--accent-ink); cursor:pointer}
+  .chip.k-wip{background:transparent; border-color:var(--wip); color:var(--wip)}
+  .chip.k-regression{background:transparent; border-color:var(--settled); color:var(--settled)}
+  .chip.k-smoke{background:transparent; border-color:var(--accent); color:var(--accent-ink)}
+  .chip.k-e2e{background:transparent; border-color:var(--shipper); color:var(--shipper)}
+  .empty{color:var(--ink-faint); font-size:13px; padding:10px 0}
+
+  /* ticket lane */
+  .lane{margin-top:20px}
+  .tickets{display:flex; flex-wrap:wrap; gap:8px; padding:16px 18px}
+  .tk-chip{
+    display:inline-flex; align-items:baseline; gap:8px; padding:6px 11px; border-radius:9px;
+    border:1px solid var(--line); background:var(--surface-2); cursor:pointer; font:inherit; color:inherit;
+    transition:border-color .14s, transform .1s;
+  }
+  .tk-chip:hover{border-color:var(--accent); transform:translateY(-1px)}
+  .tk-chip .id{font-family:"IBM Plex Mono",monospace; font-size:12.5px; font-weight:500}
+  .tk-chip .ct{
+    font-family:"IBM Plex Mono",monospace; font-size:11px; color:#fff; background:var(--accent);
+    border-radius:20px; padding:0 6px; min-width:19px; text-align:center; line-height:17px; font-variant-numeric:tabular-nums;
+  }
+  .foot{margin-top:24px; color:var(--ink-faint); font-size:12px; display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center}
+
+  @media (max-width:920px){
+    .board{grid-template-columns:1fr}
+    .stats{grid-template-columns:repeat(3,1fr)}
+    .insp{max-height:none}
+  }
+  @media (max-width:520px){ .stats{grid-template-columns:repeat(2,1fr)} h1{font-size:26px} }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="brand">
+      <svg width="44" height="44" viewBox="0 0 44 44" fill="none" aria-hidden="true">
+        <g stroke="var(--line)" stroke-width="1.6">
+          <line x1="22" y1="22" x2="8" y2="12"/><line x1="22" y1="22" x2="37" y2="14"/>
+          <line x1="22" y1="22" x2="34" y2="35"/><line x1="22" y1="22" x2="9" y2="34"/>
+        </g>
+        <circle cx="22" cy="22" r="6.4" fill="var(--accent)"/>
+        <circle cx="8" cy="12" r="3.6" fill="var(--admin)"/>
+        <circle cx="37" cy="14" r="3.2" fill="var(--shipper)"/>
+        <circle cx="34" cy="35" r="3.4" fill="var(--carrier)"/>
+        <circle cx="9" cy="34" r="2.6" fill="var(--api)"/>
+      </svg>
+      <div>
+        <h1>Command Suite Atlas</h1>
+        <p class="tagline">The Cargomatic Command test suite as a map — portals, feature areas, and the tickets they verify.</p>
+      </div>
+    </div>
+    <div class="stamp">
+      <div class="mono">playwright-automation · behave + Playwright</div>
+      <div style="margin-top:4px">generated <b id="stamp-date"></b></div>
+    </div>
+  </header>
+
+  <section class="stats" id="stats"></section>
+
+  <div class="board">
+    <section class="panel graph-wrap">
+      <div class="panel-hd">
+        <h2>Coverage map</h2>
+        <label class="search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+          <input id="search" type="search" placeholder="Filter areas or tickets…" autocomplete="off" aria-label="Filter areas or tickets">
+        </label>
+      </div>
+      <svg id="graph" viewBox="0 0 740 580" role="img" aria-label="Map of test coverage: four portals surrounded by their feature areas, sized by feature count"></svg>
+      <div class="tip" id="tip" role="status"></div>
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <aside class="panel">
+      <div class="panel-hd"><h2>Inspector</h2><span class="hd-note mono" id="insp-tag"></span></div>
+      <div class="insp" id="insp"></div>
+    </aside>
+  </div>
+
+  <section class="panel lane">
+    <div class="panel-hd"><h2>Ticket coverage</h2><span class="hd-note" id="tk-count"></span></div>
+    <div class="tickets" id="tickets"></div>
+  </section>
+
+  <div class="foot">
+    <span class="mono">generated from the working tree</span>
+    <span>·</span>
+    <span>node area &prop; feature count</span>
+    <span>·</span>
+    <span>amber arc = share of files still tagged <span class="mono">@wip</span></span>
+    <span>·</span>
+    <span>click a portal, then an area</span>
+  </div>
+</div>
+
+<script id="atlas-data" type="application/json">__ATLAS_JSON__</script>
+<script>
+(function(){
+  "use strict";
+  var A = JSON.parse(document.getElementById('atlas-data').textContent);
+  var PORTAL_COLOR = {admin:'var(--admin)', api:'var(--api)', carrier:'var(--carrier)', shipper:'var(--shipper)'};
+  var color = function(p){ return PORTAL_COLOR[p] || 'var(--api)'; };
+  var esc = function(s){ return String(s).replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); };
+  var wipOf = function(feats){ var n=0; for (var i=0;i<feats.length;i++) if (feats[i].k.indexOf('wip')>=0) n++; return n; };
+
+  document.getElementById('stamp-date').textContent =
+    new Date(A.generatedAt).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+
+  /* ---- stat strip ---------------------------------------------------- */
+  var wipFiles = 0, totalFiles = 0;
+  A.portals.forEach(function(p){ p.areas.forEach(function(a){ totalFiles += a.nf; wipFiles += wipOf(a.features); }); });
+  var stats = [
+    {n:A.totals.features,  l:'Feature files'},
+    {n:A.totals.scenarios, l:'Scenarios'},
+    {n:A.portals.reduce(function(s,p){return s+p.areas.length;},0), l:'Feature areas', accent:true},
+    {n:A.totals.tickets,   l:'Tickets covered', accent:true},
+    {n:A.totals.step_defs, l:'Step definitions'},
+    {n:Math.round(wipFiles/totalFiles*100)+'%', l:'Files still @wip', wip:true}
+  ];
+  document.getElementById('stats').innerHTML = stats.map(function(s){
+    return '<div class="stat'+(s.accent?' is-accent':'')+(s.wip?' is-wip':'')+'">'+
+      '<div class="num">'+esc(typeof s.n==='number'? s.n.toLocaleString() : s.n)+'</div>'+
+      '<div class="lbl">'+esc(s.l)+'</div></div>';
+  }).join('');
+
+  /* ---- layout: circle packing, one cluster per portal ------------------
+     A single radial tree fails on this data: admin holds 44 of the 73 areas,
+     so its wedge swallows the circle and its spokes cross everything else.
+     Packing each portal into its own cluster keeps the size comparison honest
+     — area still reads as feature count — without the crossing edges, and it
+     degrades gracefully if a fifth portal appears. Deterministic: the same
+     tree must draw the same map twice. */
+  function pack(radii, GAP){
+    var placed = [];
+    for (var i = 0; i < radii.length; i++){
+      var r = radii[i];
+      if (i === 0){ placed.push({x:0, y:0, r:r}); continue; }
+      var angle = 0, ring = placed[0].r + r + GAP, spot = null;
+      for (var guard = 0; guard < 40000; guard++){
+        var x = Math.cos(angle) * ring, y = Math.sin(angle) * ring, hit = false;
+        for (var j = 0; j < placed.length; j++){
+          var dx = x - placed[j].x, dy = y - placed[j].y;
+          if (Math.sqrt(dx*dx + dy*dy) < placed[j].r + r + GAP){ hit = true; break; }
+        }
+        if (!hit){ spot = {x:x, y:y, r:r}; break; }
+        angle += 0.22;
+        if (angle > Math.PI*2){ angle -= Math.PI*2; ring += 1.2; }
+      }
+      placed.push(spot || {x:0, y:0, r:r});
+    }
+    var R = 0;
+    placed.forEach(function(c){ R = Math.max(R, Math.sqrt(c.x*c.x + c.y*c.y) + c.r); });
+    return {placed:placed, R:R};
+  }
+
+  var areaR = function(a){ return Math.max(4.5, Math.min(21, Math.sqrt(a.nf) * 3.1)); };
+
+  var clusters = A.portals.map(function(p){
+    var packed = pack(p.areas.map(areaR), 2.2);
+    /* Two radii, deliberately.
+       `draw` hugs the packed contents, so the ring a portal gets on screen still
+       reflects how much it holds. `place` adds caption headroom and breathing
+       room for the layout. Folding the headroom into one radius inflated the
+       small clusters — carrier's ring came out near double its content, which
+       reads as coverage it does not have. */
+    return {portal:p, packed:packed, draw:packed.R + 9, R:packed.R + 30};
+  });
+
+  // Place the clusters themselves with the same routine, biggest first.
+  var order = clusters.slice().sort(function(a,b){ return b.R - a.R; });
+  // A generous gap between clusters: each carries a caption above it, and at a
+  // tight gap the small clusters tuck under admin's rim and the captions collide.
+  var outer = pack(order.map(function(c){ return c.R; }), 34);
+  order.forEach(function(c, i){ c.cx = outer.placed[i].x; c.cy = outer.placed[i].y; });
+
+  // Fit to the viewBox.
+  var VB_W = 740, VB_H = 580, PAD = 30;
+  var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  clusters.forEach(function(c){
+    minX = Math.min(minX, c.cx - c.R); maxX = Math.max(maxX, c.cx + c.R);
+    minY = Math.min(minY, c.cy - c.R); maxY = Math.max(maxY, c.cy + c.R);
+  });
+  var scale = Math.min((VB_W - PAD*2) / (maxX - minX), (VB_H - PAD*2) / (maxY - minY));
+  var offX = PAD - minX*scale + ((VB_W - PAD*2) - (maxX - minX)*scale)/2;
+  var offY = PAD - minY*scale + ((VB_H - PAD*2) - (maxY - minY)*scale)/2;
+  var TX = function(x){ return x*scale + offX; };
+  var TY = function(y){ return y*scale + offY; };
+
+  var nodes = [];
+  clusters.forEach(function(c){
+    var hub = {
+      kind:'portal', key:c.portal.name, label:c.portal.name, portal:c.portal.name,
+      x:TX(c.cx), y:TY(c.cy), r:c.draw*scale, data:c.portal
+    };
+    nodes.push(hub);
+    c.portal.areas.forEach(function(a, i){
+      var slot = c.packed.placed[i];
+      nodes.push({
+        kind:'area', key:a.name,
+        label:a.name.split('/').slice(1).join('/') || a.name,
+        portal:c.portal.name,
+        x:TX(c.cx + slot.x), y:TY(c.cy + slot.y), r:slot.r*scale,
+        data:a, parent:hub
+      });
+    });
+  });
+
+  /* ---- render graph ---------------------------------------------------- */
+  var svg = document.getElementById('graph');
+  var NS = 'http://www.w3.org/2000/svg';
+  var el = function(tag, attrs){
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  };
+
+  var featsOf = function(n){
+    return n.kind === 'portal'
+      ? n.data.areas.reduce(function(acc,a){ return acc.concat(a.features); }, [])
+      : n.data.features;
+  };
+
+  var nodeEls = {};
+
+  // Portal groups first, so area bubbles sit on top of their ground.
+  nodes.filter(function(n){ return n.kind==='portal'; }).forEach(function(n){
+    var g = el('g', {class:'node hub', tabindex:'0', role:'button'});
+    g.setAttribute('aria-label', 'portal ' + n.key + ', ' + n.data.nf + ' feature files');
+    g.appendChild(el('circle', {class:'halo', cx:n.x, cy:n.y, r:n.r+3}));
+    g.appendChild(el('circle', {class:'group', cx:n.x, cy:n.y, r:n.r, fill:color(n.portal)}));
+    var t = el('text', {x:n.x, y:n.y - n.r - 9, 'text-anchor':'middle'});
+    t.textContent = n.label + ' · ' + n.data.nf;
+    g.appendChild(t);
+    attach(g, n);
+    svg.appendChild(g);
+    nodeEls['portal:'+n.key] = g;
+  });
+
+  nodes.filter(function(n){ return n.kind==='area'; }).forEach(function(n){
+    var g = el('g', {class:'node', tabindex:'0', role:'button'});
+    g.setAttribute('aria-label', 'area ' + n.key + ', ' + n.data.nf + ' feature files');
+    g.appendChild(el('circle', {class:'halo', cx:n.x, cy:n.y, r:n.r+3.5}));
+    g.appendChild(el('circle', {class:'body', cx:n.x, cy:n.y, r:n.r, fill:color(n.portal)}));
+
+    // wip share as a rim arc — a second channel, so it never competes with hue
+    var feats = featsOf(n), share = feats.length ? wipOf(feats)/feats.length : 0;
+    if (share > 0.001){
+      var rr = n.r + 3, sweep = Math.min(share, 0.999) * Math.PI*2, a0 = -Math.PI/2;
+      var x1 = n.x + Math.cos(a0)*rr, y1 = n.y + Math.sin(a0)*rr;
+      var x2 = n.x + Math.cos(a0+sweep)*rr, y2 = n.y + Math.sin(a0+sweep)*rr;
+      g.appendChild(el('path', {
+        class:'wip-arc',
+        d:'M '+x1.toFixed(2)+' '+y1.toFixed(2)+' A '+rr.toFixed(2)+' '+rr.toFixed(2)+
+          ' 0 '+(sweep > Math.PI ? 1 : 0)+' 1 '+x2.toFixed(2)+' '+y2.toFixed(2)
+      }));
+    }
+
+    // A label is drawn only if it actually fits inside its bubble. Thresholding
+    // on radius alone let long names like "shipment_leg_management" spill across
+    // their neighbours; 73 bubbles overprinting is worse than no labels, and
+    // every name is one hover away regardless.
+    var short = n.label.split('/').pop();
+    // Eight characters is the floor for a label that reads as a name rather than
+    // a stub — below it, "exce…" carries less than the hover does.
+    var fits = Math.floor((n.r*2 - 9) / 5.35);
+    if (fits >= 8){
+      var text = short.length > fits ? short.slice(0, fits-1) + '…' : short;
+      var t2 = el('text', {x:n.x, y:n.y+3.4, 'text-anchor':'middle', 'font-size':'9.5',
+                           fill:'#fff', 'font-weight':'500'});
+      t2.textContent = text;
+      g.appendChild(t2);
+    }
+
+    attach(g, n);
+    svg.appendChild(g);
+    nodeEls['area:'+n.key] = g;
+  });
+
+  function attach(g, n){
+    g.addEventListener('click', function(){ select(n); });
+    g.addEventListener('keydown', function(ev){
+      if (ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); select(n); }
+    });
+    g.addEventListener('mouseenter', function(){ showTip(n); });
+    g.addEventListener('mouseleave', hideTip);
+    g.addEventListener('focus', function(){ showTip(n); });
+    g.addEventListener('blur', hideTip);
+  }
+
+  var tip = document.getElementById('tip');
+  function showTip(n){
+    var box = svg.getBoundingClientRect();
+    var sx = box.width/740, sy = box.height/580;
+    tip.style.left = (n.x*sx) + 'px';
+    tip.style.top  = (n.y*sy) + 'px';
+    var feats = featsOf(n);
+    var w = wipOf(feats);
+    tip.innerHTML = '<div class="t-n">'+esc(n.key)+'</div>'+
+      '<div class="t-m">'+n.data.nf+' files · '+n.data.ns+' scenarios'+(w? ' · '+w+' wip':'')+'</div>';
+    tip.style.opacity = 1;
+  }
+  function hideTip(){ tip.style.opacity = 0; }
+
+  /* ---- legend ---------------------------------------------------------- */
+  document.getElementById('legend').innerHTML =
+    A.portals.map(function(p){
+      return '<span class="lg"><span class="dot" style="background:'+color(p.name)+'"></span>'+
+             esc(p.name)+' · '+p.nf+' files</span>';
+    }).join('') +
+    '<span class="lg"><span class="bar"></span>@wip share</span>';
+
+  /* ---- inspector ------------------------------------------------------- */
+  var insp = document.getElementById('insp'), inspTag = document.getElementById('insp-tag');
+  var selected = null;
+
+  function bar(settled, wip, total){
+    if (!total) return '<div class="track"></div>';
+    return '<div class="track">'+
+      '<div class="seg-settled" style="width:'+(settled/total*100)+'%"></div>'+
+      '<div class="seg-wip" style="width:'+(wip/total*100)+'%"></div></div>';
+  }
+
+  function select(n){
+    selected = n;
+    Object.keys(nodeEls).forEach(function(k){ nodeEls[k].classList.remove('sel'); });
+    var e = nodeEls[n.kind+':'+n.key]; if (e) e.classList.add('sel');
+    if (n.kind === 'portal') renderPortal(n.data); else renderArea(n.data, n.parent);
+  }
+
+  function renderPortal(p){
+    inspTag.textContent = p.nf + ' files';
+    var max = Math.max.apply(null, p.areas.map(function(a){ return a.nf; }));
+    insp.innerHTML =
+      '<div class="eyebrow">Portal</div>'+
+      '<h3>'+esc(p.name)+'</h3>'+
+      '<div class="meta">'+p.areas.length+' feature areas · '+p.ns+' scenarios · '+p.tickets.length+' tickets</div>'+
+      '<div class="rows">'+ p.areas.map(function(a){
+        var w = wipOf(a.features);
+        return '<button class="row" data-area="'+esc(a.name)+'">'+
+          '<span class="rn">'+esc(a.name.split('/').slice(1).join('/') || a.name)+'</span>'+
+          '<span class="rv">'+a.nf+'</span>'+
+          bar(a.nf-w, w, max)+'</button>';
+      }).join('') +'</div>';
+    insp.scrollTop = 0;
+    insp.querySelectorAll('.row').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var key = btn.getAttribute('data-area');
+        var node = nodes.filter(function(x){ return x.kind==='area' && x.key===key; })[0];
+        if (node) select(node);
+      });
+    });
+  }
+
+  function renderArea(a, parent){
+    inspTag.textContent = a.nf + ' files';
+    var w = wipOf(a.features);
+    insp.innerHTML =
+      '<button class="backbtn" id="back">&larr; '+esc(parent ? parent.key : 'back')+'</button>'+
+      '<div class="eyebrow">Feature area</div>'+
+      '<h3 class="mono" style="font-size:19px">'+esc(a.name)+'</h3>'+
+      '<div class="meta">'+a.nf+' files · '+a.ns+' scenarios'+(w? ' · '+w+' still @wip':'')+'</div>'+
+      a.features.map(function(f){
+        return '<div class="feat"><div class="fn">'+esc(f.n)+'</div>'+
+          (f.title ? '<div class="ft">'+esc(f.title)+'</div>' : '')+
+          '<div class="fmeta">'+
+            '<span class="chip">'+f.s+' scenario'+(f.s===1?'':'s')+'</span>'+
+            f.k.map(function(k){ return '<span class="chip k-'+esc(k)+'">'+esc(k)+'</span>'; }).join('')+
+            f.t.map(function(t){ return '<span class="chip tk">'+esc(t)+'</span>'; }).join('')+
+          '</div></div>';
+      }).join('');
+    insp.scrollTop = 0;
+    var back = document.getElementById('back');
+    if (back && parent) back.addEventListener('click', function(){ select(parent); });
+  }
+
+  function renderIntro(){
+    inspTag.textContent = '';
+    insp.innerHTML =
+      '<div class="eyebrow">Overview</div>'+
+      '<h3>'+A.totals.features.toLocaleString()+' feature files</h3>'+
+      '<div class="meta">across '+A.portals.length+' portals and '+
+        A.portals.reduce(function(s,p){return s+p.areas.length;},0)+' feature areas.</div>'+
+      '<div class="rows">'+ A.portals.map(function(p){
+        var feats = p.areas.reduce(function(acc,a){ return acc.concat(a.features); }, []);
+        var w = wipOf(feats);
+        return '<button class="row" data-portal="'+esc(p.name)+'">'+
+          '<span class="rn"><span class="lg" style="display:inline-flex"><span class="dot" style="background:'+color(p.name)+'"></span></span> '+esc(p.name)+'</span>'+
+          '<span class="rv">'+p.nf+'</span>'+
+          bar(p.nf-w, w, A.portals[0].nf)+'</button>';
+      }).join('') +'</div>'+
+      '<div class="empty">Pick a portal to see its areas, then an area to read its feature files.</div>';
+    insp.querySelectorAll('.row').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var key = btn.getAttribute('data-portal');
+        var node = nodes.filter(function(x){ return x.kind==='portal' && x.key===key; })[0];
+        if (node) select(node);
+      });
+    });
+  }
+  renderIntro();
+
+  /* ---- ticket lane ----------------------------------------------------- */
+  var tickets = A.tickets;
+  document.getElementById('tk-count').textContent = tickets.length + ' tickets referenced by tags';
+  document.getElementById('tickets').innerHTML = tickets.map(function(t){
+    return '<button class="tk-chip" data-tk="'+esc(t.id)+'"><span class="id">'+esc(t.id)+'</span>'+
+           '<span class="ct">'+t.count+'</span></button>';
+  }).join('');
+  document.querySelectorAll('.tk-chip').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var id = btn.getAttribute('data-tk');
+      document.getElementById('search').value = id;
+      applyFilter(id);
+    });
+  });
+
+  /* ---- filter ---------------------------------------------------------- */
+  function matches(n, q){
+    if (!q) return true;
+    q = q.toLowerCase();
+    if (n.key.toLowerCase().indexOf(q) >= 0) return true;
+    var feats = n.kind==='portal'
+      ? n.data.areas.reduce(function(acc,a){ return acc.concat(a.features); }, [])
+      : n.data.features;
+    return feats.some(function(f){
+      return f.n.toLowerCase().indexOf(q) >= 0 ||
+             f.t.some(function(t){ return t.toLowerCase().indexOf(q) >= 0; });
+    });
+  }
+  function applyFilter(q){
+    nodes.forEach(function(n){
+      var e = nodeEls[n.kind+':'+n.key];
+      if (e) e.classList.toggle('dim', !matches(n, q));
+    });
+  }
+  var searchEl = document.getElementById('search');
+  searchEl.addEventListener('input', function(){ applyFilter(searchEl.value.trim()); });
+})();
+</script>

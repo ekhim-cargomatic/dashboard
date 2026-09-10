@@ -13,3 +13,7 @@ infra/deploy.env
 
 # Untracked: internal training matrix (named owners, internal doc links) — repo is public
 data/
+
+# Generated Atlas output — feature names and ticket ids; repo is public
+atlas.json
+atlas.html
