@@ -7,6 +7,8 @@
  *
  *   ?ff=training-on    turn on   (also: training, training:on, training=on)
  *   ?ff=training-off   turn off  (also: -training, !training, training:off)
+ *   ?ff=notion-on      the "Send to agent-dev" button on each failing test
+ *   ?ff=training,notion            several at once
  *   ?ff=               clear all overrides
  *
  * Several spellings are accepted on purpose: the explicit `-on`/`-off` suffix is
@@ -24,7 +26,7 @@
  * which is what lib/training.ts does.
  */
 
-export const FLAGS = ['training'] as const;
+export const FLAGS = ['training', 'notion'] as const;
 export type FlagName = (typeof FLAGS)[number];
 
 const STORAGE_KEY = 'qa-flags';

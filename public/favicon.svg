@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="QA dashboard">
+  <!--
+    Monochrome robot mark. Deliberately two-tone: a favicon is read at 16px, where
+    a third value and any fine detail collapse into mud. Everything that carries
+    the likeness — quiff, ear cans, visor, grid eyes, segmented smile — survives as
+    silhouette; the colour and the body below the neck do not, so they are gone.
+
+    `currentColor` is not inherited by favicons, so both themes are spelled out:
+    ink on a transparent ground by default, flipping in a dark tab bar.
+  -->
+  <style>
+    .ink   { fill: #111111; }
+    .cut   { fill: #ffffff; }
+    .smile { stroke: #111111; }
+    @media (prefers-color-scheme: dark) {
+      .ink   { fill: #f5f5f5; }
+      .cut   { fill: #111111; }
+      .smile { stroke: #f5f5f5; }
+    }
+  </style>
+
+  <g class="ink">
+    <!-- Ear cans -->
+    <rect x="3" y="25" width="9" height="15" rx="4.5" />
+    <rect x="52" y="25" width="9" height="15" rx="4.5" />
+    <!-- Head, with the swept quiff riding above the crown -->
+    <path d="M32 3c7 0 10 2 13 5 3-1 5 0 6 2-2 0-3 1-4 2 2 2 3 5 3 9v21c0 7-5 12-12 12H26c-7 0-12-5-12-12V21c0-9 6-16 14-17 1-.7 2-1 4-1Z" />
+  </g>
+
+  <!-- Visor: knocked out of the head so the face reads as negative space -->
+  <rect class="cut" x="18" y="19" width="28" height="21" rx="5" />
+
+  <!-- Grid eyes, simplified to solid blocks -->
+  <g class="ink">
+    <rect x="22.5" y="23.5" width="7" height="7" rx="1.2" />
+    <rect x="34.5" y="23.5" width="7" height="7" rx="1.2" />
+  </g>
+
+  <!-- Segmented smile, drawn as one stroke — the segments vanish by 24px anyway -->
+  <path class="smile" d="M23 33c2.5 4 6 6 9 6s6.5-2 9-6"
+        fill="none" stroke-width="3.4" stroke-linecap="round" />
+</svg>

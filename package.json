@@ -15,6 +15,7 @@
     "gen:domains": "node scripts/gen-domains.mjs",
     "summary": "node ci/qa-summary.mjs",
     "fixtures": "node scripts/make-fixtures.mjs",
+    "notion:local": "node infra/notion-agent-task/local-server.mjs",
     "deploy": "bash infra/deploy.sh"
   },
   "dependencies": {

@@ -19,6 +19,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   maxRunsPerWorkflow: 60,
   clusterRuns: 5,
   ciRunUrlTemplate: '',
+  notionFnUrl: '',
+  notionFnToken: '',
 };
 
 export async function loadConfig(): Promise<AppConfig> {
@@ -35,6 +37,8 @@ export async function loadConfig(): Promise<AppConfig> {
       maxRunsPerWorkflow: raw.maxRunsPerWorkflow ?? DEFAULT_CONFIG.maxRunsPerWorkflow,
       clusterRuns: raw.clusterRuns ?? DEFAULT_CONFIG.clusterRuns,
       ciRunUrlTemplate: raw.ciRunUrlTemplate ?? DEFAULT_CONFIG.ciRunUrlTemplate,
+      notionFnUrl: raw.notionFnUrl ?? DEFAULT_CONFIG.notionFnUrl,
+      notionFnToken: raw.notionFnToken ?? DEFAULT_CONFIG.notionFnToken,
     };
   } catch {
     // No config.json deployed — same-origin defaults are the right guess.

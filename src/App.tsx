@@ -488,7 +488,12 @@ export default function App() {
                   {selectedRun.failureCount > selectedRun.failures.length &&
                     ` Showing the first ${selectedRun.failures.length}.`}
                 </p>
-                <FailuresTable run={selectedRun} areaFilter={selectedArea} />
+                <FailuresTable
+                  run={selectedRun}
+                  areaFilter={selectedArea}
+                  config={config!}
+                  notionEnabled={flags.notion}
+                />
               </div>
             </section>
           )}

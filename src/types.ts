@@ -139,4 +139,18 @@ export interface AppConfig {
    * Empty disables the CI link.
    */
   ciRunUrlTemplate: string;
+  /**
+   * Lambda Function URL that files a failing test as an agent-dev task in Notion.
+   *
+   * The Notion API sends no CORS headers and the integration token must not ship
+   * in this bundle, so the send goes through infra/notion-agent-task instead.
+   * Empty hides the button entirely — the dashboard stays useful without it.
+   */
+  notionFnUrl: string;
+  /**
+   * Sent as `x-dashboard-token` to the function above, when it is configured to
+   * require one. This ships in config.json and is therefore public: it deters
+   * drive-by POSTs, it is not authentication. See infra/deploy-notion-fn.sh.
+   */
+  notionFnToken: string;
 }

@@ -13,8 +13,10 @@ import type { AreaImpact, MergedCluster } from '../lib/aggregate';
 import { dateTime, duration, int, pct, relativeTime, truncate } from '../lib/format';
 import { labelForDomain } from '../lib/domains.generated';
 import { statusMeta } from '../lib/status';
-import type { AppConfig, RunSummary } from '../types';
+import type { AppConfig, Failure, RunSummary } from '../types';
 import { reportUrl } from '../lib/s3';
+import { canSendToAgent } from '../lib/notion';
+import { SendToAgentDialog } from './SendToAgentDialog';
 
 /** Status as colour + glyph + word — never colour alone. */
 export function StatusChip({ status }: { status: string }) {
@@ -215,7 +217,25 @@ export function RunsTable({
 
 // --------------------------------------------------------------------------- //
 
-export function FailuresTable({ run, areaFilter }: { run: RunSummary; areaFilter: string | null }) {
+export function FailuresTable({
+  run,
+  areaFilter,
+  config,
+  notionEnabled = false,
+}: {
+  run: RunSummary;
+  areaFilter: string | null;
+  config: AppConfig;
+  /** The `notion` feature flag — see lib/flags.ts. Off hides the send column. */
+  notionEnabled?: boolean;
+}) {
+  // One dialog for the whole table — the row buttons just choose which failure
+  // it is open on, so there is a single piece of send state rather than N.
+  const [sending, setSending] = useState<Failure | null>(null);
+  // Both must hold: the flag opts this browser in, and the function must actually
+  // be deployed. Either one missing and there is nothing useful to click.
+  const canSend = notionEnabled && canSendToAgent(config);
+
   // The area key can be a tag, a domain or a feature depending on how the chart
   // is grouped, so match all three rather than assuming one.
   const failures = areaFilter
@@ -245,6 +265,7 @@ export function FailuresTable({ run, areaFilter }: { run: RunSummary; areaFilter
             <th>Area</th>
             <th>Status</th>
             <th>Error</th>
+            {canSend && <th aria-label="File as an agent-dev task" />}
           </tr>
         </thead>
         <tbody>
@@ -263,6 +284,18 @@ export function FailuresTable({ run, areaFilter }: { run: RunSummary; areaFilter
               <td className="wrap-anywhere mono" style={{ fontSize: 11 }}>
                 {truncate(failure.message || '—', 160)}
               </td>
+              {canSend && (
+                <td>
+                  <button
+                    type="button"
+                    className="btn send-agent"
+                    title={`File "${failure.name}" as an agent-dev task in Notion`}
+                    onClick={() => setSending(failure)}
+                  >
+                    Send
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -271,6 +304,14 @@ export function FailuresTable({ run, areaFilter }: { run: RunSummary; areaFilter
         <p className="dim" style={{ fontSize: 12 }}>
           Showing 100 of {int(failures.length)} — open the Allure report for the rest.
         </p>
+      )}
+      {sending && (
+        <SendToAgentDialog
+          config={config}
+          run={run}
+          failure={sending}
+          onClose={() => setSending(null)}
+        />
       )}
     </div>
   );

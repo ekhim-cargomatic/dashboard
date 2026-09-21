@@ -851,3 +851,217 @@ table.data .mono {
     display: none;
   }
 }
+
+/* --------------------------------------------------------------------------
+ * "Send to agent-dev" — the per-row button and its dialog.
+ *
+ * The row button is deliberately quiet: a failures table is already dense, and
+ * the action is not the reason you came to the page. It gains weight on hover.
+ * -------------------------------------------------------------------------- */
+
+button.btn.send-agent {
+  height: 26px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+button.btn.send-agent:hover {
+  color: var(--text-primary);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(11, 11, 11, 0.45);
+}
+
+.modal {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(11, 11, 11, 0.25);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.modal-close {
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.modal-close:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+
+.modal-facts {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  gap: 4px 12px;
+  margin: 0 0 14px;
+  font-size: 13px;
+}
+
+.modal-facts dt {
+  color: var(--text-muted);
+}
+
+.modal-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.modal-error-preview {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  max-height: 140px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.modal-label {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.modal-select {
+  font: inherit;
+  font-size: 13px;
+  width: 100%;
+  max-width: none;
+  height: 34px;
+  margin-bottom: 16px;
+  padding: 0 30px 0 10px;
+  color: var(--text-primary);
+  background-color: var(--surface-1);
+  border: 1px solid var(--axis);
+  border-radius: var(--radius-sm);
+}
+
+.modal-textarea {
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  width: 100%;
+  padding: 9px 11px;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--axis);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+}
+
+.modal-textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.modal-success {
+  margin: 0 0 10px;
+  font-weight: 600;
+  color: var(--status-good);
+}
+
+.modal-failure {
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  font-size: 12px;
+  color: var(--status-critical);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.modal-btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  height: 34px;
+  padding: 0 14px;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--axis);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.modal-btn:hover:not(:disabled) {
+  background-color: var(--ghost);
+  border-color: var(--text-muted);
+}
+
+.modal-btn.primary {
+  color: #ffffff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.modal-btn.primary:hover:not(:disabled) {
+  background: var(--ramp-7);
+  border-color: var(--ramp-7);
+}
+
+.modal-btn:disabled,
+.modal-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-btn:focus-visible,
+.modal-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

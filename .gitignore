@@ -11,6 +11,10 @@ public/config.json
 # Untracked: embeds the AWS account id, and this repo is public
 infra/deploy.env
 
+# Untracked: the Notion integration secret, read by infra/deploy-notion-fn.sh.
+# Never commit — it grants write access to whatever the integration is shared with.
+infra/.notion-token
+
 # Untracked: internal training matrix (named owners, internal doc links) — repo is public
 data/
 

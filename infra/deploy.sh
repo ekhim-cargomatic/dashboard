@@ -344,7 +344,10 @@ npm run build
 jq -n \
   --arg prefix "$RUNS_PREFIX" \
   --argjson maxRuns "$MAX_RUNS_PER_WORKFLOW" \
-  '{dataBaseUrl: "", reportBaseUrl: "", runsPrefix: $prefix, maxRunsPerWorkflow: $maxRuns}' \
+  --arg notionFnUrl "${NOTION_FN_URL:-}" \
+  --arg notionFnToken "${DASHBOARD_TOKEN:-}" \
+  '{dataBaseUrl: "", reportBaseUrl: "", runsPrefix: $prefix, maxRunsPerWorkflow: $maxRuns,
+    notionFnUrl: $notionFnUrl, notionFnToken: $notionFnToken}' \
   > "$ROOT/dist/config.json"
 
 log "Uploading to s3://$BUCKET"
@@ -359,9 +362,13 @@ aws s3 cp "$ROOT/dist/index.html" "s3://$BUCKET/index.html" \
 aws s3 cp "$ROOT/dist/config.json" "s3://$BUCKET/config.json" \
   --cache-control "no-cache" --content-type "application/json"
 
+# Unhashed, so it must revalidate like index.html rather than being cached hard.
+aws s3 cp "$ROOT/dist/favicon.svg" "s3://$BUCKET/favicon.svg" \
+  --cache-control "no-cache" --content-type "image/svg+xml"
+
 log "Invalidating cache"
 aws cloudfront create-invalidation --distribution-id "$DIST_ID" \
-  --paths "/index.html" "/config.json" --query 'Invalidation.Id' --output text
+  --paths "/index.html" "/config.json" "/favicon.svg" --query 'Invalidation.Id' --output text
 
 cat <<EOF
 
