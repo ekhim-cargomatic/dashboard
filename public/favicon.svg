@@ -1,42 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="QA dashboard">
   <!--
-    Monochrome robot mark. Deliberately two-tone: a favicon is read at 16px, where
-    a third value and any fine detail collapse into mud. Everything that carries
-    the likeness — quiff, ear cans, visor, grid eyes, segmented smile — survives as
-    silhouette; the colour and the body below the neck do not, so they are gone.
+    App-icon style mark: a dark squircle tile carrying an outlined robot head.
+    Because the tile supplies its own ground, this one does NOT flip with
+    prefers-color-scheme — it reads the same on a light or dark tab bar, which is
+    the point of a tile.
 
-    `currentColor` is not inherited by favicons, so both themes are spelled out:
-    ink on a transparent ground by default, flipping in a dark tab bar.
+    Sized for 16px first. The head outline, antenna and the two arc eyes are the
+    only things that survive there, so they carry the weight: the ring is thick,
+    the screen is a large dark hole, and the eyes sit high with a wide gap. The
+    "EK" on the ear cans is a 3px detail that only resolves from 48px up — it is
+    deliberately low-contrast so it reads as texture, not noise, when it blurs.
   -->
-  <style>
-    .ink   { fill: #111111; }
-    .cut   { fill: #ffffff; }
-    .smile { stroke: #111111; }
-    @media (prefers-color-scheme: dark) {
-      .ink   { fill: #f5f5f5; }
-      .cut   { fill: #111111; }
-      .smile { stroke: #f5f5f5; }
-    }
-  </style>
+  <defs>
+    <clipPath id="ear-l"><rect x="6.5" y="26" width="7.5" height="14" rx="3.75" /></clipPath>
+    <clipPath id="ear-r"><rect x="50" y="26" width="7.5" height="14" rx="3.75" /></clipPath>
+  </defs>
 
-  <g class="ink">
-    <!-- Ear cans -->
-    <rect x="3" y="25" width="9" height="15" rx="4.5" />
-    <rect x="52" y="25" width="9" height="15" rx="4.5" />
-    <!-- Head, with the swept quiff riding above the crown -->
-    <path d="M32 3c7 0 10 2 13 5 3-1 5 0 6 2-2 0-3 1-4 2 2 2 3 5 3 9v21c0 7-5 12-12 12H26c-7 0-12-5-12-12V21c0-9 6-16 14-17 1-.7 2-1 4-1Z" />
+  <!-- Tile -->
+  <rect width="64" height="64" rx="15" fill="#0b0b0c" />
+
+  <!-- Ear cans, with the initials knocked into them -->
+  <g>
+    <rect x="6.5" y="26" width="7.5" height="14" rx="3.75" fill="#f4f6f7" />
+    <rect x="50" y="26" width="7.5" height="14" rx="3.75" fill="#f4f6f7" />
+    <g font-family="Helvetica, Arial, sans-serif" font-size="9" font-weight="700" fill="#2febc0">
+      <text x="10.25" y="36.2" text-anchor="middle" clip-path="url(#ear-l)">E</text>
+      <text x="53.75" y="36.2" text-anchor="middle" clip-path="url(#ear-r)">K</text>
+    </g>
   </g>
 
-  <!-- Visor: knocked out of the head so the face reads as negative space -->
-  <rect class="cut" x="18" y="19" width="28" height="21" rx="5" />
+  <!-- Antenna -->
+  <rect x="30.7" y="14" width="2.6" height="9" rx="1.3" fill="#f4f6f7" />
+  <circle cx="32" cy="11.6" r="4.3" fill="#f4f6f7" />
 
-  <!-- Grid eyes, simplified to solid blocks -->
-  <g class="ink">
-    <rect x="22.5" y="23.5" width="7" height="7" rx="1.2" />
-    <rect x="34.5" y="23.5" width="7" height="7" rx="1.2" />
+  <!-- Head: a white ring with the screen cut out of it -->
+  <rect x="12.5" y="20.5" width="39" height="27" rx="11.5" fill="#f4f6f7" />
+  <rect x="17.5" y="25.2" width="29" height="17.6" rx="7" fill="#0f1011" />
+
+  <!-- Eyes: two arcs, the whole expression of the thing -->
+  <g fill="none" stroke="#2febc0" stroke-width="3.6" stroke-linecap="round">
+    <path d="M21.8 36.6q4.1-6.6 8.2 0" />
+    <path d="M34 36.6q4.1-6.6 8.2 0" />
   </g>
-
-  <!-- Segmented smile, drawn as one stroke — the segments vanish by 24px anyway -->
-  <path class="smile" d="M23 33c2.5 4 6 6 9 6s6.5-2 9-6"
-        fill="none" stroke-width="3.4" stroke-linecap="round" />
 </svg>
