@@ -50,7 +50,18 @@
       "Bash(curl -s https://d34o4mvhjdaxkf.cloudfront.net/runs/smoke-tests/20260819T201944Z-0/qa-summary.json)",
       "Bash(sed -i '' 's/                {pct\\(value, 0\\)}/                {pct\\(value, scale.decimals\\)}/' src/components/TrendChart.tsx)",
       "Bash(sed -i '' 's/.all_inner_texts\\(\\)/.all_text_contents\\(\\)/' /tmp/live3.py)",
-      "Bash(/Users/ekhim/Documents/Automation/playwright-automation/.venv/bin/python /tmp/live3.py)"
+      "Bash(/Users/ekhim/Documents/Automation/playwright-automation/.venv/bin/python /tmp/live3.py)",
+      "Bash(/Users/ekhim/Documents/Automation/playwright-automation/.venv/bin/python /tmp/find404.py)",
+      "Bash(awk '{print $4}')",
+      "Bash(./infra/deploy.sh --app-only)",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(node scripts/gen-domains.mjs --tag-map /Users/ekhim/Documents/Automation/playwright-automation/tag_map.yaml)",
+      "Bash(node ci/qa-summary.mjs --results /Users/ekhim/Documents/Automation/playwright-automation/reports/allure-results --out /tmp/tagtest.json --workflow smoke)",
+      "Bash(pkill -f vite)",
+      "Bash(node /tmp/expected.mjs)",
+      "Bash(node /tmp/window.mjs)",
+      "Bash(echo \"--- src clean: $? ---\")",
+      "Bash(sed -i '' 's/const cutoff = Date.now\\(\\) - 30\\\\*86400000;/const cutoff = 0;/' /tmp/window.mjs)"
     ]
   }
 }
