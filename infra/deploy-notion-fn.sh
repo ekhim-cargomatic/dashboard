@@ -17,13 +17,21 @@
 # After the first run, put the printed URL in infra/deploy.env as
 # NOTION_FN_URL=... so ./infra/deploy.sh writes it into the SPA's config.json.
 #
-# SECURITY: the Function URL is public (AuthType NONE) because a static page has
-# no credentials to sign with. CORS restricts *browsers* to the dashboard origin,
-# but anyone who learns the URL can still POST to it with curl and create Notion
-# tasks. DASHBOARD_TOKEN raises that bar slightly — it is shipped in the SPA's
-# config.json, so treat it as a speed bump, not authentication. The function can
-# only create pages in one database with one template, which is the real limit on
-# the blast radius.
+# NOT a Lambda Function URL: this AWS Organization denies lambda:InvokeFunctionUrl,
+# so a Function URL 403s every caller — including requests signed with admin
+# credentials — and the function is never reached. An HTTP API is not covered by
+# that guardrail.
+#
+# The API is fronted by the dashboard's own CloudFront distribution at /api/*
+# (see cloudfront-api-behavior.py), which makes the browser call same-origin. That
+# removes CORS from the picture and means the endpoint is only reachable through
+# the dashboard's domain rather than as a standalone public URL.
+#
+# SECURITY: the route is still unauthenticated — a static page has no credentials
+# to sign with. DASHBOARD_TOKEN raises the bar slightly, but it ships in the SPA's
+# config.json, so treat it as a speed bump rather than authentication. The real
+# limit on blast radius is that the function can only create pages in one database
+# from one template.
 
 set -euo pipefail
 
@@ -62,6 +70,17 @@ aws sts get-caller-identity >/dev/null || {
 }
 
 log() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+
+ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+
+# The distribution that fronts the dashboard — found by the Comment deploy.sh sets,
+# so the /api/* route lands on the same one the SPA is served from.
+if [[ -n "${BUCKET:-}" ]]; then
+  DIST_ID="$(aws cloudfront list-distributions \
+    --query "DistributionList.Items[?Comment=='qa-dashboard-${BUCKET}'].Id | [0]" \
+    --output text 2>/dev/null || echo '')"
+  [[ "$DIST_ID" == "None" ]] && DIST_ID=''
+fi
 
 # The origin allowed to call the function. Derived from the live distribution so
 # it cannot drift from where the dashboard is actually served.
@@ -172,35 +191,41 @@ else
 fi
 
 # --------------------------------------------------------------------------- #
-# Function URL
+# HTTP API
 # --------------------------------------------------------------------------- #
 
-# CORS is enforced by Lambda here *and* echoed by the handler; the handler's copy
-# is what a non-browser client sees, and what returns 403 on a wrong Origin.
-CORS_JSON="$(jq -n --arg origin "${ALLOWED_ORIGIN:-*}" \
-  '{AllowOrigins: [$origin],
-    AllowMethods: ["POST"],
-    AllowHeaders: ["content-type", "x-dashboard-token"],
-    MaxAge: 86400}')"
+API_NAME="${NOTION_API_NAME:-qa-dashboard-notion-api}"
+FN_ARN="$(aws lambda get-function --function-name "$FN_NAME" --region "$REGION" \
+  --query 'Configuration.FunctionArn' --output text)"
 
-if aws lambda get-function-url-config --function-name "$FN_NAME" --region "$REGION" >/dev/null 2>&1; then
-  [[ "$CODE_ONLY" == false ]] && aws lambda update-function-url-config \
-    --function-name "$FN_NAME" --region "$REGION" \
-    --auth-type NONE --cors "$CORS_JSON" --query 'FunctionUrl' --output text >/dev/null
-else
-  log "Creating the Function URL"
-  aws lambda create-function-url-config --function-name "$FN_NAME" --region "$REGION" \
-    --auth-type NONE --cors "$CORS_JSON" --query 'FunctionUrl' --output text >/dev/null
+API_ID="$(aws apigatewayv2 get-apis --region "$REGION" \
+  --query "Items[?Name=='${API_NAME}'].ApiId | [0]" --output text 2>/dev/null || echo 'None')"
 
-  # A public Function URL still needs an explicit resource policy.
+if [[ "$API_ID" == "None" || -z "$API_ID" ]]; then
+  log "Creating HTTP API $API_NAME"
+  # --target builds the proxy integration, the $default route and the $default
+  # stage in one call, which is all this needs.
+  API_ID="$(aws apigatewayv2 create-api --name "$API_NAME" --protocol-type HTTP \
+    --target "$FN_ARN" --region "$REGION" --query 'ApiId' --output text)"
+
   aws lambda add-permission --function-name "$FN_NAME" --region "$REGION" \
-    --statement-id FunctionURLAllowPublicAccess \
-    --action lambda:InvokeFunctionUrl \
-    --principal '*' --function-url-auth-type NONE >/dev/null 2>&1 || true
+    --statement-id apigw-invoke --action lambda:InvokeFunction \
+    --principal apigateway.amazonaws.com \
+    --source-arn "arn:aws:execute-api:${REGION}:${ACCOUNT_ID}:${API_ID}/*/*" >/dev/null 2>&1 || true
+else
+  log "HTTP API $API_NAME already exists ($API_ID)"
 fi
 
-FN_URL="$(aws lambda get-function-url-config --function-name "$FN_NAME" --region "$REGION" \
-  --query 'FunctionUrl' --output text)"
+API_DOMAIN="${API_ID}.execute-api.${REGION}.amazonaws.com"
+
+# --------------------------------------------------------------------------- #
+# CloudFront route
+# --------------------------------------------------------------------------- #
+
+if [[ "$CODE_ONLY" == false && -n "${DIST_ID:-}" ]]; then
+  log "Routing /api/* to the API on distribution $DIST_ID"
+  python3 "$HERE/cloudfront-api-behavior.py" "$DIST_ID" "$API_DOMAIN"
+fi
 
 rm -rf "$(dirname "$ZIP")"
 
@@ -209,13 +234,14 @@ cat <<EOF
 Done.
 
   Function     $FN_NAME  ($REGION)
-  URL          $FN_URL
-  Allowed from ${ALLOWED_ORIGIN:-<unset>}
+  HTTP API     $API_ID  ($API_DOMAIN)
+  Reached at   ${ALLOWED_ORIGIN:-<origin>}/api/notion-task
   Tasks DB     $NOTION_TASKS_DB_ID
+  Assignee     $NOTION_ASSIGNEE_ID
 
-Add this to infra/deploy.env so the SPA picks it up, then redeploy:
+infra/deploy.env should contain the same-origin path:
 
-  NOTION_FN_URL=$FN_URL
+  NOTION_FN_URL=/api/notion-task
 
   ./infra/deploy.sh --app-only
 
