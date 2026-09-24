@@ -170,7 +170,53 @@ function buildBlocks({ prompt, failure, run, repo }) {
   );
   blocks.push(
     bullet(
-      'R3. If the cause is a product defect, the fix is in product code — the test is not weakened, retried or skipped to make it pass.',
+      'R3. If the cause is a product defect, the fix is in product code. The test is not weakened to accommodate the bug.',
+    ),
+  );
+  blocks.push(
+    bullet(
+      'R4. The test still fails if the behaviour it covers regresses. A change that cannot fail has not fixed anything.',
+    ),
+  );
+
+  // The failure mode this exists to prevent: an agent wrapping the failing
+  // interaction in try/except and passing either way. That turns a red test
+  // green while removing the only thing it was there to detect, and it reads as
+  // a fix in review, so it has to be ruled out explicitly rather than implied.
+  blocks.push(heading('How NOT to fix it'));
+  blocks.push(
+    paragraph(
+      'These are automated checks. Each one must have exactly one passing outcome — if the code cannot distinguish a working app from a broken one, it is not a test. The following are rejected on sight, whatever the commit message says:',
+    ),
+  );
+  blocks.push(
+    bullet(
+      'try/except (or try/catch) around an interaction or assertion that swallows the error — `except Exception: pass`, `except: continue`, or an empty handler. If a step can legitimately no-op, assert that it did.',
+    ),
+  );
+  blocks.push(
+    bullet(
+      'A branch where both sides count as success — `if dialog.is_visible(): confirm() else: pass`. Decide which state is correct for THIS scenario and assert it. If it genuinely varies, the scenario needs splitting, not branching.',
+    ),
+  );
+  blocks.push(
+    bullet(
+      'Reaching green by waiting harder: longer timeouts, added sleeps, retries, reloads or re-running the step. Those hide a race rather than fixing it.',
+    ),
+  );
+  blocks.push(
+    bullet(
+      'Deleting or softening the assertion, marking the scenario @wip/@bug/@skip, or narrowing it so the failing path is no longer exercised.',
+    ),
+  );
+  blocks.push(
+    bullet(
+      'Catching an exception only to log it and carry on. A swallowed failure in CI is a false green, which is worse than a red build.',
+    ),
+  );
+  blocks.push(
+    paragraph(
+      'If you cannot make it pass without one of the above, stop and report that in the PR description instead. An accurate "this is a real defect and here is why" is a better outcome than a green test that checks nothing.',
     ),
   );
 
