@@ -62,6 +62,12 @@ export interface Failure {
   uuid: string;
   /** The scenario's behave tags — what a tag-bar click filters on. */
   tags: string[];
+  /**
+   * Filename of the screenshot taken at the moment of failure, under the run's
+   * `data/attachments/`. Absent when nothing was captured — a `broken` test that
+   * timed out usually dies before the hook that takes it.
+   */
+  screenshot?: string;
 }
 
 /** One `qa-summary.json`, i.e. one CI run. */

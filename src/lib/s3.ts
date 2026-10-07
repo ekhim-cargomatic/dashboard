@@ -391,6 +391,17 @@ export function reportUrl(config: AppConfig, run: RunSummary): string {
   return joinUrl(base, `${run.prefix}/${run.reportPath || 'index.html'}`);
 }
 
+/**
+ * URL of one of a run's Allure attachments — a failure screenshot, say.
+ *
+ * `source` is the bare filename the report stores; attachments always sit under
+ * the run's `data/attachments/`.
+ */
+export function attachmentUrl(config: AppConfig, run: RunSummary, source: string): string {
+  const base = config.reportBaseUrl || config.dataBaseUrl;
+  return joinUrl(base, `${run.prefix}/data/attachments/${source}`);
+}
+
 /** URL of a suite's `latest/` mirror — a stable link that always shows the newest run. */
 export function latestReportUrl(config: AppConfig, suite: string): string {
   const base = config.reportBaseUrl || config.dataBaseUrl;

@@ -161,6 +161,18 @@ function buildBlocks({ prompt, failure, run, repo }) {
   blocks.push(heading('Failure output'));
   blocks.push(code(truncate(failure.message || '—', RICH_TEXT_LIMIT * 4)));
 
+  // Embedded, not linked: the state of the screen usually says in one glance
+  // what the trace takes several minutes to establish. Notion fetches the URL
+  // itself, which works because the reports bucket is public.
+  if (run.screenshotUrl) {
+    blocks.push(heading('Screen at the moment of failure'));
+    blocks.push({
+      object: 'block',
+      type: 'image',
+      image: { type: 'external', external: { url: run.screenshotUrl } },
+    });
+  }
+
   blocks.push(heading('Acceptance criteria'));
   blocks.push(bullet(`R1. \`${failure.name}\` passes against ${run.environment || 'staging'}.`));
   blocks.push(

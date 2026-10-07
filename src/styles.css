@@ -1065,3 +1065,68 @@ button.btn.send-agent:hover {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+/* --------------------------------------------------------------------------
+ * Failure screenshots.
+ *
+ * Captures are full-page and around a megabyte, so the table only ever shows a
+ * button; the image is fetched when one is clicked and shown at full width over
+ * a scrim, where it can actually be read.
+ * -------------------------------------------------------------------------- */
+
+button.btn.shot {
+  height: 26px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+button.btn.shot:hover {
+  color: var(--text-primary);
+}
+
+.shot-viewer {
+  width: min(1180px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(11, 11, 11, 0.25);
+}
+
+.shot-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.shot-open {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.shot-open:hover {
+  text-decoration: underline;
+}
+
+.shot-body {
+  overflow: auto;
+  padding: 12px;
+  /* The checker reads through transparent regions of a PNG, so a blank capture
+     is visibly blank rather than looking like a failed load. */
+  background:
+    repeating-conic-gradient(var(--surface-2) 0% 25%, var(--surface-1) 0% 50%) 50% / 18px 18px;
+}
+
+.shot-body img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}

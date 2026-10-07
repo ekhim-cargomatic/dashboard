@@ -12,7 +12,7 @@
  */
 
 import type { AppConfig, Failure, RunSummary } from '../types';
-import { reportUrl } from './s3';
+import { attachmentUrl, reportUrl } from './s3';
 import { isAreaTag } from './domains';
 
 /** Repos the Tasks database offers. A value outside this list makes Notion reject the page. */
@@ -123,6 +123,11 @@ export async function sendFailureToAgent(options: {
           commit: run.commitShort || run.commit,
           ciUrl: run.ciUrl,
           reportUrl: absolute(reportUrl(config, run)),
+          // The screen at the moment of failure — far faster to read than the
+          // stack trace, so it goes in the ticket rather than only the dashboard.
+          screenshotUrl: failure.screenshot
+            ? absolute(attachmentUrl(config, run, failure.screenshot))
+            : '',
         },
       }),
     });

@@ -67,6 +67,24 @@ interface AllureEnvEntry {
   values?: string[];
 }
 
+/** One file hung off a step or a stage — screenshots, traces, page HTML, logs. */
+interface AllureAttachment {
+  name?: string;
+  /** Filename under `data/attachments/`. */
+  source?: string;
+  type?: string;
+}
+
+interface AllureStep {
+  attachments?: AllureAttachment[];
+  steps?: AllureStep[];
+}
+
+interface AllureStage {
+  attachments?: AllureAttachment[];
+  steps?: AllureStep[];
+}
+
 interface AllureTestCase {
   uid?: string;
   name?: string;
@@ -76,6 +94,46 @@ interface AllureTestCase {
   statusMessage?: string;
   statusTrace?: string;
   statusDetails?: { message?: string; trace?: string };
+  beforeStages?: AllureStage[];
+  testStage?: AllureStage;
+  afterStages?: AllureStage[];
+}
+
+/**
+ * The screenshot taken when the test gave up, if there is one.
+ *
+ * behave's failure hook hangs it off the step that failed, so it is nested
+ * somewhere inside testStage rather than on the test case itself. The last image
+ * is the one wanted: earlier ones are mid-flow captures, and the final frame is
+ * the state the assertion actually saw. Returns '' when nothing was captured,
+ * which is normal for a `broken` test that timed out before the hook ran.
+ */
+function lastScreenshot(detail: AllureTestCase | null): string {
+  if (!detail) return '';
+  const found: string[] = [];
+
+  const fromAttachments = (attachments?: AllureAttachment[]) => {
+    for (const attachment of attachments ?? []) {
+      if (attachment.source && (attachment.type ?? '').startsWith('image/')) {
+        found.push(attachment.source);
+      }
+    }
+  };
+
+  const walk = (steps?: AllureStep[]) => {
+    for (const step of steps ?? []) {
+      fromAttachments(step.attachments);
+      walk(step.steps);
+    }
+  };
+
+  for (const stage of [detail.testStage, ...(detail.afterStages ?? []), ...(detail.beforeStages ?? [])]) {
+    if (!stage) continue;
+    fromAttachments(stage.attachments);
+    walk(stage.steps);
+  }
+
+  return found[found.length - 1] ?? '';
 }
 
 /** One test, flattened out of the Allure trees. */
@@ -499,6 +557,11 @@ export async function enrichWithFailureDetail(
     // fullName is nicer for display when the report carries one.
     if (detail?.fullName) failure.fullName = detail.fullName;
     if (detail?.historyId) failure.historyId = detail.historyId;
+
+    // Stored as the bare filename; the table resolves it against the run prefix,
+    // so the same value works from the dashboard and from a Notion ticket.
+    const shot = lastScreenshot(detail);
+    if (shot) failure.screenshot = shot;
 
     let cluster = clusters.get(failure.fingerprint);
     if (!cluster) {

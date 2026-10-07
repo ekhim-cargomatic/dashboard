@@ -7,14 +7,14 @@
  * home for the long tail the charts cap — 26 domains do not belong in a legend.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { AreaImpact, MergedCluster } from '../lib/aggregate';
 import { dateTime, duration, int, pct, relativeTime, truncate } from '../lib/format';
 import { labelForDomain } from '../lib/domains.generated';
 import { statusMeta } from '../lib/status';
 import type { AppConfig, Failure, RunSummary } from '../types';
-import { reportUrl } from '../lib/s3';
+import { attachmentUrl, reportUrl } from '../lib/s3';
 import { canSendToAgent } from '../lib/notion';
 import { SendToAgentDialog } from './SendToAgentDialog';
 
@@ -232,6 +232,10 @@ export function FailuresTable({
   // One dialog for the whole table — the row buttons just choose which failure
   // it is open on, so there is a single piece of send state rather than N.
   const [sending, setSending] = useState<Failure | null>(null);
+  // Screenshots are full-page captures around a megabyte each, so a hundred
+  // inline thumbnails would be both unreadable and enormous. Nothing is fetched
+  // until a row is clicked, and then only that one, full size.
+  const [viewing, setViewing] = useState<Failure | null>(null);
   // Both must hold: the flag opts this browser in, and the function must actually
   // be deployed. Either one missing and there is nothing useful to click.
   const canSend = notionEnabled && canSendToAgent(config);
@@ -265,6 +269,7 @@ export function FailuresTable({
             <th>Area</th>
             <th>Status</th>
             <th>Error</th>
+            <th aria-label="Failure screenshot" />
             {canSend && <th aria-label="File as an agent-dev task" />}
           </tr>
         </thead>
@@ -283,6 +288,24 @@ export function FailuresTable({
               </td>
               <td className="wrap-anywhere mono" style={{ fontSize: 11 }}>
                 {truncate(failure.message || '—', 160)}
+              </td>
+              <td>
+                {failure.screenshot ? (
+                  <button
+                    type="button"
+                    className="btn shot"
+                    title={`Screenshot taken when "${failure.name}" failed`}
+                    onClick={() => setViewing(failure)}
+                  >
+                    View
+                  </button>
+                ) : (
+                  // Said plainly rather than left blank — an empty cell reads as
+                  // "not loaded yet" when it actually means none was captured.
+                  <span className="dim" style={{ fontSize: 11 }} title="No screenshot was captured for this failure">
+                    none
+                  </span>
+                )}
               </td>
               {canSend && (
                 <td>
@@ -313,6 +336,59 @@ export function FailuresTable({
           onClose={() => setSending(null)}
         />
       )}
+      {viewing?.screenshot && (
+        <ScreenshotViewer
+          src={attachmentUrl(config, run, viewing.screenshot)}
+          failure={viewing}
+          onClose={() => setViewing(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Full-size failure screenshot over a scrim. Escape or a click outside closes it. */
+function ScreenshotViewer({
+  src,
+  failure,
+  onClose,
+}: {
+  src: string;
+  failure: Failure;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div
+        className="shot-viewer"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Screenshot for ${failure.name}`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal-head">
+          <h2>{truncate(failure.name, 70)}</h2>
+          <span className="shot-actions">
+            <a href={src} target="_blank" rel="noopener noreferrer" className="shot-open">
+              Open full size ↗
+            </a>
+            <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
+              ×
+            </button>
+          </span>
+        </div>
+        <div className="shot-body">
+          <img src={src} alt={`The screen when "${failure.name}" failed`} />
+        </div>
+      </div>
     </div>
   );
 }
