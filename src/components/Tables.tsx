@@ -33,39 +33,104 @@ export function StatusChip({ status }: { status: string }) {
 
 // --------------------------------------------------------------------------- //
 
+const PAGE_SIZES = [10, 50, 100] as const;
+
 export function AreaTable({ areas, groupLabel }: { areas: AreaImpact[]; groupLabel: string }) {
+  const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[0]);
+  const [page, setPage] = useState(0);
+
+  const pageCount = Math.max(1, Math.ceil(areas.length / pageSize));
+  // Changing the run, the grouping or a filter can shrink the list under the
+  // current page. Clamp on render rather than resetting in an effect, so the
+  // table never paints a blank page on the way to page 0.
+  const current = Math.min(page, pageCount - 1);
+  const start = current * pageSize;
+  const visible = areas.slice(start, start + pageSize);
+
   if (areas.length === 0) return <p className="empty-note">No areas to show.</p>;
 
   return (
-    <div className="table-scroll">
-      <table className="data">
-        <caption className="visually-hidden">
-          {groupLabel} ranked by number of failing tests
-        </caption>
-        <thead>
-          <tr>
-            <th>{groupLabel}</th>
-            <th className="num">Needs attention</th>
-            <th className="num">Executed</th>
-            <th className="num">Fail rate</th>
-            <th className="num">Runs affected</th>
-          </tr>
-        </thead>
-        <tbody>
-          {areas.map((area) => (
-            <tr key={area.key}>
-              <td>{area.label}</td>
-              <td className="num">{int(area.impacted)}</td>
-              <td className="num">{int(area.executed)}</td>
-              <td className="num">{pct(area.failRate)}</td>
-              <td className="num">
-                {area.runsAffected} / {area.runsSeen}
-              </td>
+    <>
+      <div className="table-scroll">
+        <table className="data">
+          <caption className="visually-hidden">
+            {groupLabel} ranked by number of failing tests
+          </caption>
+          <thead>
+            <tr>
+              <th>{groupLabel}</th>
+              <th className="num">Needs attention</th>
+              <th className="num">Executed</th>
+              <th className="num">Fail rate</th>
+              <th className="num">Runs affected</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {visible.map((area) => (
+              <tr key={area.key}>
+                <td>{area.label}</td>
+                <td className="num">{int(area.impacted)}</td>
+                <td className="num">{int(area.executed)}</td>
+                <td className="num">{pct(area.failRate)}</td>
+                <td className="num">
+                  {area.runsAffected} / {area.runsSeen}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="pager">
+        <label className="pager-size">
+          <span>Rows</span>
+          <select
+            value={pageSize}
+            onChange={(event) => {
+              // Keep the first visible row in view instead of jumping to the
+              // top — changing the page size shouldn't lose your place.
+              const next = Number(event.target.value);
+              setPage(Math.floor(start / next));
+              setPageSize(next);
+            }}
+          >
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <span className="pager-range dim">
+          {int(start + 1)}–{int(start + visible.length)} of {int(areas.length)}
+        </span>
+
+        <span className="pager-nav">
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setPage(current - 1)}
+            disabled={current === 0}
+            aria-label="Previous page"
+          >
+            ‹
+          </button>
+          <span className="dim">
+            {current + 1} / {pageCount}
+          </span>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setPage(current + 1)}
+            disabled={current >= pageCount - 1}
+            aria-label="Next page"
+          >
+            ›
+          </button>
+        </span>
+      </div>
+    </>
   );
 }
 

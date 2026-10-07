@@ -1130,3 +1130,67 @@ button.btn.shot:hover {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
+
+/* --------------------------------------------------------------------------
+ * Table pager.
+ *
+ * The tag breakdown runs to a couple of hundred rows, which buries everything
+ * below it. Ten rows by default shows the head of the ranking — the part that
+ * is actually actionable — with the rest a click away.
+ * -------------------------------------------------------------------------- */
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 2px 2px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.pager-size {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-secondary);
+}
+
+.pager-size select {
+  font: inherit;
+  font-size: 12px;
+  height: 28px;
+  padding: 0 26px 0 8px;
+  color: var(--text-primary);
+  background-color: var(--surface-1);
+  border: 1px solid var(--axis);
+  border-radius: var(--radius-sm);
+}
+
+/* Pushes the nav to the right edge without a spacer element. */
+.pager-range {
+  margin-right: auto;
+}
+
+.pager-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pager-nav button.btn {
+  height: 28px;
+  min-width: 30px;
+  padding: 0 9px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.pager-nav button.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pager-nav button.btn:disabled:hover {
+  background: var(--surface-1);
+  border-color: var(--axis);
+}
