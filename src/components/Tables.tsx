@@ -61,6 +61,9 @@ export function AreaTable({ areas, groupLabel }: { areas: AreaImpact[]; groupLab
               <th>{groupLabel}</th>
               <th className="num">Needs attention</th>
               <th className="num">Executed</th>
+              <th className="num" title="Executed ÷ total. Anything under 100% was partly skipped.">
+                Coverage
+              </th>
               <th className="num">Fail rate</th>
               <th className="num">Runs affected</th>
             </tr>
@@ -71,6 +74,14 @@ export function AreaTable({ areas, groupLabel }: { areas: AreaImpact[]; groupLab
                 <td>{area.label}</td>
                 <td className="num">{int(area.impacted)}</td>
                 <td className="num">{int(area.executed)}</td>
+                <td
+                  className="num"
+                  // The denominator matters when reading this: 50% of 4 and 50%
+                  // of 400 are not the same finding.
+                  title={`${int(area.executed)} executed of ${int(area.total)}, ${int(area.total - area.executed)} skipped`}
+                >
+                  {area.total > 0 ? pct(area.executed / area.total) : '—'}
+                </td>
                 <td className="num">{pct(area.failRate)}</td>
                 <td className="num">
                   {area.runsAffected} / {area.runsSeen}

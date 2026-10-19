@@ -454,7 +454,9 @@ export default function App() {
                 <span className="hint">all {areas.length} areas</span>
               </div>
               <p className="card-sub">
-                The full table behind the chart above, including areas with no failures.
+                The full table behind the chart above, including areas with no failures. Coverage is
+                how much of each area actually ran — a low fail rate over low coverage is not a
+                healthy area, it is an untested one.
               </p>
               <AreaTable areas={areas} groupLabel={GROUP_LABEL} />
             </div>
