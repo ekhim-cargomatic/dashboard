@@ -68,6 +68,12 @@ export interface Failure {
    * timed out usually dies before the hook that takes it.
    */
   screenshot?: string;
+  /**
+   * The full stack trace, not the one-line message. Carries the repo file and
+   * line number that actually raised, which is what a ticket needs and the
+   * table does not. Capped, but real traces run to a couple of kilobytes.
+   */
+  trace?: string;
 }
 
 /** One `qa-summary.json`, i.e. one CI run. */

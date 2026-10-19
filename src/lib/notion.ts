@@ -109,6 +109,7 @@ export async function sendFailureToAgent(options: {
           domain: failure.domain,
           status: failure.status,
           message: failure.message,
+          trace: failure.trace,
           // Only the tags that say something about the product. The same filter
           // the area charts use, so the ticket doesn't carry `car-1482`, `tee7`
           // and the auth-role selectors into a human's reading queue.

@@ -554,6 +554,12 @@ export async function enrichWithFailureDetail(
 
     failure.message = message.slice(0, 600);
     failure.fingerprint = fingerprint(message);
+
+    // The table only ever shows the first line, but the ticket wants the whole
+    // thing: the trace is where the repo file and line number live, and it is
+    // only a couple of kilobytes.
+    const trace = (detail?.statusTrace ?? detail?.statusDetails?.trace ?? '').trim();
+    if (trace) failure.trace = trace.slice(0, 8000);
     // fullName is nicer for display when the report carries one.
     if (detail?.fullName) failure.fullName = detail.fullName;
     if (detail?.historyId) failure.historyId = detail.historyId;

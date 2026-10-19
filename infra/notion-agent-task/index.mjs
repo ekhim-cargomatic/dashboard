@@ -37,6 +37,8 @@ const RICH_TEXT_LIMIT = 2000;
 const TITLE_LIMIT = 80;
 /** Refuse oversized bodies rather than passing them to Notion. */
 const MAX_BODY_BYTES = 128 * 1024;
+/** Notion rejects a page carrying more than 100 child blocks; leave room. */
+const MAX_TRACE_FILES = 12;
 
 const REPOS = new Set([
   'lorax',
@@ -69,6 +71,37 @@ function featureFile(failure) {
   const suite = String(failure.suite ?? '').trim();
   if (!suite || suite === '(root)') return '';
   return `features/${suite}.feature`;
+}
+
+/**
+ * Repo-relative files named by the stack trace, deepest frame last.
+ *
+ * Traces come off a GitHub runner, so frames look like
+ *   File "/home/runner/work/<repo>/<repo>/features/steps/x.py", line 1317, in step_y
+ * and the useful part is everything after the doubled repo segment. Frames in
+ * site-packages are someone else's code and only add noise.
+ *
+ * Deduplicated on path, keeping the LAST line number seen: later frames are
+ * deeper in the call stack, and the deepest frame is where it actually broke.
+ */
+function filesFromTrace(trace) {
+  const seen = new Map();
+  const frame = /File "([^"]+)", line (\d+)/g;
+
+  for (const [, rawPath, line] of String(trace ?? '').matchAll(frame)) {
+    if (rawPath.includes('site-packages') || rawPath.includes('/lib/python')) continue;
+    // /home/runner/work/<repo>/<repo>/features/... -> features/...
+    const relative = rawPath.replace(/^.*?\/home\/runner\/work\/[^/]+\/[^/]+\//, '');
+    if (relative === rawPath && rawPath.startsWith('/')) continue; // unrecognised layout
+    seen.set(relative, line);
+  }
+
+  // Notion rejects a page with more than 100 child blocks, and a deep or
+  // recursive trace can name far more frames than that. The deepest are the
+  // informative ones and they come last, so keep the tail.
+  return [...seen]
+    .slice(-MAX_TRACE_FILES)
+    .map(([path, line]) => `\`${path}\` — line ${line}`);
 }
 
 /**
@@ -161,6 +194,14 @@ function buildBlocks({ prompt, failure, run, repo }) {
   blocks.push(heading('Failure output'));
   blocks.push(code(truncate(failure.message || '—', RICH_TEXT_LIMIT * 4)));
 
+  // The whole trace, not an excerpt. richText() splits it across the 2000-char
+  // items Notion allows, and a code block takes up to 100 of them — far more
+  // than any real trace needs.
+  if (failure.trace) {
+    blocks.push(heading('Stack trace'));
+    blocks.push(code(truncate(failure.trace, RICH_TEXT_LIMIT * 20), 'python'));
+  }
+
   // Embedded, not linked: the state of the screen usually says in one glance
   // what the trace takes several minutes to establish. Notion fetches the URL
   // itself, which works because the reports bucket is public.
@@ -237,7 +278,18 @@ function buildBlocks({ prompt, failure, run, repo }) {
   blocks.push(bullet('Refactoring the surrounding page objects or step definitions beyond what the fix requires.'));
 
   blocks.push(heading('Files likely touched'));
-  blocks.push(bullet('Agent to discover.'));
+  const traced = filesFromTrace(failure.trace);
+  if (traced.length) {
+    blocks.push(paragraph('Taken from the stack trace, deepest frame last — the last entry is where it raised:'));
+    for (const entry of traced) blocks.push(bullet(entry));
+    blocks.push(
+      bullet(
+        'A hint, not a constraint. The trace shows where it surfaced, which is not always where the cause lives.',
+      ),
+    );
+  } else {
+    blocks.push(bullet('Agent to discover.'));
+  }
 
   return blocks;
 }
