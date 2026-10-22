@@ -15,6 +15,7 @@ import { discoverRuns, fetchRunSummaries } from './lib/s3';
 import { enrichWithFailureDetail } from './lib/allure';
 import { resolveFlags, type FlagName } from './lib/flags';
 import { TrainingPanel } from './components/TrainingPanel';
+import { FlowMap } from './components/FlowMap';
 import { int, relativeTime } from './lib/format';
 import { AreaHeatmap } from './components/AreaHeatmap';
 import { AreaImpactChart, type ImpactMetric } from './components/AreaImpactChart';
@@ -26,6 +27,7 @@ import { AreaTable, ClustersTable, FailuresTable, RunsTable } from './components
 import type { AppConfig, GroupBy, RunSummary } from './types';
 
 type Theme = 'light' | 'dark' | 'system';
+type Tab = 'runs' | 'flow';
 
 /**
  * Areas are grouped by raw behave tag.
@@ -62,6 +64,7 @@ export default function App() {
   );
   // Resolved once: the URL override is consumed and persisted on first render.
   const [flags] = useState<Record<FlagName, boolean>>(() => resolveFlags());
+  const [tab, setTab] = useState<Tab>('runs');
 
   useEffect(() => {
     if (theme === 'system') document.documentElement.removeAttribute('data-theme');
@@ -165,9 +168,73 @@ export default function App() {
 
   // --------------------------------------------------------------- views -- //
 
+  // The flow map is its own data source (public/qa-flow/), so it must not sit
+  // behind the run-loading gates below — an unreachable bucket should not take
+  // the map down with it.
+  const tabs = flags.qa ? (
+    <div className="segmented" role="group" aria-label="View">
+      {(['runs', 'flow'] as Tab[]).map((option) => (
+        <button
+          key={option}
+          type="button"
+          aria-pressed={tab === option}
+          onClick={() => setTab(option)}
+        >
+          {option === 'runs' ? 'Runs' : 'App flow'}
+        </button>
+      ))}
+    </div>
+  ) : null;
+
+  if (flags.qa && tab === 'flow') {
+    return (
+      <div className="app is-full">
+        <header className="topbar">
+          <div className="brand">
+            <h1>QA Automation Dashboard</h1>
+            <p className="brand-meta">
+              App flow map
+              <span className="sep" aria-hidden="true">·</span>
+              behind <code>?qa=1</code>
+            </p>
+          </div>
+          <div className="topbar-controls">
+            {tabs}
+            <div className="topbar-divider" aria-hidden="true" />
+            <div className="segmented" role="group" aria-label="Theme">
+              {(['light', 'system', 'dark'] as Theme[]).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  aria-pressed={theme === option}
+                  onClick={() => setTheme(option)}
+                >
+                  {option === 'light' ? 'Light' : option === 'dark' ? 'Dark' : 'Auto'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </header>
+        <section className="block">
+          <FlowMap />
+        </section>
+      </div>
+    );
+  }
+
+  const stateBar = tabs ? (
+    <header className="topbar">
+      <div className="brand">
+        <h1>QA Automation Dashboard</h1>
+      </div>
+      <div className="topbar-controls">{tabs}</div>
+    </header>
+  ) : null;
+
   if (load.status === 'loading' && runs.length === 0) {
     return (
       <div className="app">
+        {stateBar}
         <div className="state">
           <h2>Loading runs…</h2>
           <p>
@@ -188,6 +255,7 @@ export default function App() {
   if (load.status === 'error') {
     return (
       <div className="app">
+        {stateBar}
         <div className="state">
           <h2>{load.message}</h2>
           <p className="muted">{load.detail}</p>
@@ -213,6 +281,7 @@ export default function App() {
   if (runs.length === 0) {
     return (
       <div className="app">
+        {stateBar}
         <div className="state">
           <h2>No runs published yet</h2>
           <p className="muted">
@@ -266,6 +335,9 @@ export default function App() {
         </div>
 
         <div className="topbar-controls">
+          {tabs}
+          {tabs && <div className="topbar-divider" aria-hidden="true" />}
+
           <Filters filters={filters} onChange={setFilters} facets={allFacets} />
 
           <div className="topbar-divider" aria-hidden="true" />

@@ -366,15 +366,26 @@ aws s3 cp "$ROOT/dist/config.json" "s3://$BUCKET/config.json" \
 aws s3 cp "$ROOT/dist/favicon.svg" "s3://$BUCKET/favicon.svg" \
   --cache-control "no-cache" --content-type "image/svg+xml"
 
+# The QA flow maps (behind ?qa=1). Vite copies public/ into dist/, but these are
+# not hashed and are edited far more often than the bundle, so they revalidate
+# like index.html rather than being cached hard. Without this sync the App flow
+# tab 404s in production while working perfectly in `npm run dev`.
+if [[ -d "$ROOT/dist/qa-flow" ]]; then
+  aws s3 sync "$ROOT/dist/qa-flow/" "s3://$BUCKET/qa-flow/" \
+    --cache-control "no-cache" --content-type "application/json" --delete
+fi
+
 log "Invalidating cache"
 aws cloudfront create-invalidation --distribution-id "$DIST_ID" \
-  --paths "/index.html" "/config.json" "/favicon.svg" --query 'Invalidation.Id' --output text
+  --paths "/index.html" "/config.json" "/favicon.svg" "/qa-flow/*" \
+  --query 'Invalidation.Id' --output text
 
 cat <<EOF
 
 Done.
 
   Dashboard   https://${DOMAIN}/
+  App flow    https://${DOMAIN}/?qa=1
   Bucket      s3://${BUCKET}
   Runs prefix ${RUNS_PREFIX}
   Distribution ${DIST_ID}

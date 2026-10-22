@@ -1194,3 +1194,240 @@ button.btn.shot:hover {
   background: var(--surface-1);
   border-color: var(--axis);
 }
+
+/* ───────────────────────────── QA flow map (?qa=1) ───────────────────────── */
+/*
+   Full-bleed: the map is a working surface, not a report, so it uses the whole
+   window rather than the dashboard's reading column.
+*/
+.app.is-full { max-width: none; padding-left: 20px; padding-right: 20px; }
+
+.fm { display: flex; flex-direction: column; gap: 14px; }
+
+.fm-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; }
+.fm-head h2 { margin: 0; font-size: 19px; }
+.fm-sub { margin: 4px 0 0; font-size: 12.5px; color: var(--text-secondary); }
+.fm-sub code { font-size: 12px; }
+.fm-desc { margin: 0; max-width: 90ch; font-size: 13px; color: var(--text-secondary); }
+
+.fm-head-controls { display: flex; align-items: center; gap: 12px; }
+.fm-search {
+  min-width: 280px; padding: 7px 10px; font-size: 13px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-1); color: var(--text-primary);
+}
+.fm-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); white-space: nowrap; }
+
+.fm-hits { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--text-secondary); }
+.fm-hit {
+  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+  border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer;
+}
+.fm-hit:hover { border-color: var(--accent); }
+.fm-hit code { font-size: 11px; color: var(--text-muted); margin-right: 4px; }
+
+/* ── the spine ─────────────────────────────────────────────────────────── */
+.fm-body { display: flex; flex-direction: column; gap: 18px; }
+
+.fm-rail { position: sticky; top: 12px; display: flex; flex-direction: column; }
+.fm-rail-item { display: flex; flex-direction: column; }
+
+.fm-chunk {
+  display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left;
+  padding: 11px 13px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-1); cursor: pointer; color: var(--text-primary);
+}
+.fm-chunk:hover { border-color: var(--axis); }
+.fm-chunk.is-active { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.fm-chunk-name { font-weight: 600; font-size: 13.5px; }
+.fm-chunk-id { font-size: 11px; color: var(--text-muted); }
+.fm-chunk-meta { font-size: 11.5px; color: var(--text-secondary); }
+.fm-chunk-gap { color: var(--status-serious); font-style: normal; font-weight: 600; }
+.fm-chunk-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.fm-tag { font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: var(--ghost); color: var(--text-secondary); }
+
+.fm-connector { display: flex; align-items: center; gap: 8px; padding-left: 18px; height: 34px; }
+.fm-connector svg { width: 24px; height: 34px; overflow: visible; }
+.fm-connector path { fill: none; stroke: var(--axis); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.fm-edge-label { font-size: 11px; color: var(--text-muted); font-style: italic; }
+
+.fm-planned { margin-top: 18px; padding: 12px 13px; border: 1px dashed var(--border); border-radius: var(--radius); }
+.fm-planned h3 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.fm-planned ul { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--text-secondary); }
+
+/* ── the detail ────────────────────────────────────────────────────────── */
+.fm-detail {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-1); max-height: calc(100vh - 180px); overflow: auto;
+}
+.fm-detail-head {
+  position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between;
+  align-items: flex-start; gap: 16px; padding: 14px 16px;
+  border-bottom: 1px solid var(--border); background: var(--surface-1);
+}
+.fm-detail-head h3 { margin: 0; font-size: 15px; }
+.fm-detail-head code { margin-right: 4px; }
+.fm-empty { padding: 28px 24px; }
+.fm-empty h3 { margin: 0 0 8px; font-size: 15px; }
+.fm-empty p { max-width: 70ch; font-size: 13px; }
+.fm-vars { margin: 18px 0 0; font-size: 12.5px; }
+.fm-vars > div { display: flex; gap: 10px; padding: 3px 0; }
+.fm-vars dt { min-width: 90px; }
+.fm-vars dd { margin: 0; color: var(--text-secondary); }
+
+.fm-nodes { list-style: none; margin: 0; padding: 6px 0; }
+
+.fm-node {
+  padding: 8px 16px 8px calc(16px + var(--depth, 0) * 18px);
+  border-left: 2px solid transparent;
+}
+.fm-node + .fm-node { border-top: 1px solid var(--ghost); }
+.fm-node.is-match { background: var(--ghost); border-left-color: var(--accent); }
+.fm-node.has-gap { border-left-color: var(--status-serious); }
+.fm-node-page, .fm-node-section, .fm-node-modal { background: var(--ghost); }
+
+.fm-node-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px; }
+.fm-node-name { font-weight: 600; font-size: 13px; }
+.fm-id { font-size: 10.5px; color: var(--text-muted); margin-left: auto; }
+
+.fm-kind {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+  padding: 1px 6px; border-radius: 4px; background: var(--ghost); color: var(--text-secondary);
+}
+.fm-kind-page { background: var(--ramp-7); color: var(--ramp-7-ink); }
+.fm-kind-modal { background: var(--ramp-5); color: var(--ramp-5-ink); }
+.fm-kind-section { background: var(--ramp-2); color: var(--ramp-2-ink); }
+.fm-kind-action { background: var(--status-good); color: #fff; }
+.fm-kind-assert { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+
+.fm-chip { font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: var(--ghost); color: var(--text-secondary); }
+.fm-chip.dim { color: var(--text-muted); }
+.fm-chip.req { background: var(--ramp-1); color: var(--ramp-1-ink); }
+.fm-chip.wait { background: var(--status-warning); color: #0b0b0b; }
+.fm-chip.danger { background: var(--status-critical); color: #fff; }
+
+.fm-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px; margin-top: 4px; font-size: 12px; }
+.fm-label { min-width: 62px; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.fm-selector { word-break: break-all; color: var(--text-primary); }
+.fm-src { font-size: 11px; color: var(--status-good); }
+.fm-src.dim { color: var(--text-muted); }
+.fm-then .fm-label { font-style: italic; }
+
+.fm-copy {
+  font-size: 10.5px; padding: 1px 7px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--text-muted);
+}
+.fm-copy:hover { color: var(--text-primary); border-color: var(--axis); }
+
+.fm-api {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px;
+  margin-top: 5px; padding: 5px 9px; border-radius: var(--radius-sm);
+  background: var(--surface-2); font-size: 12px;
+}
+.fm-api-verify { border-left: 2px solid var(--status-good); }
+.fm-api-await { border-left: 2px solid var(--accent); }
+.fm-api-role { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); min-width: 56px; }
+.fm-api-path { word-break: break-all; }
+.fm-method { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: var(--ghost); }
+.fm-method-GET { color: var(--status-good); }
+.fm-method-POST, .fm-method-PUT, .fm-method-PATCH { color: var(--accent); }
+.fm-method-DELETE { color: var(--status-critical); }
+.fm-assert { font-size: 11px; color: var(--text-secondary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.fm-note { flex-basis: 100%; margin: 4px 0 0; font-size: 11.5px; color: var(--text-muted); max-width: 90ch; }
+.fm-gap { margin: 5px 0 0; font-size: 11.5px; color: var(--status-serious); }
+
+/* ── chunk graph (layered DAG) ──────────────────────────────────────────── */
+/*
+   Replaces the vertical rail. At 30 chunks and 44 edges a column misrepresented
+   the shape: four entry points converge on the same accounting chunks, and
+   several chunks have two or three predecessors.
+*/
+.fm-graph {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+.fg-wrap { display: flex; flex-direction: column; }
+.fg-tools {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  font-size: 11.5px; color: var(--text-secondary);
+}
+.fg-legend, .fg-toggle { display: inline-flex; align-items: center; gap: 6px; }
+.fg-toggle { cursor: pointer; user-select: none; }
+.fg-toggle input { margin: 0; }
+.fg-hint { margin-left: auto; }
+.fg-key-tree { stroke: var(--axis); stroke-width: 1.6; }
+.fg-key-cross { stroke: var(--text-muted); stroke-width: 1.4; stroke-dasharray: 4 3; }
+.fg-scroll { overflow: auto; max-height: 56vh; padding: 4px; }
+.fg { display: block; }
+
+.fg-edge { fill: none; stroke: var(--axis); stroke-width: 1.4; }
+.fg-arrowhead { fill: var(--axis); }
+.fg-arrowhead-hot { fill: var(--accent); }
+/* Cross-links are real connections but not prerequisites: present, not loud. */
+.fg-edges .is-cross .fg-edge {
+  stroke: var(--text-muted); stroke-width: 1.1; stroke-dasharray: 4 3; opacity: 0.5;
+}
+.fg-edges .is-hot .fg-edge { stroke: var(--accent); stroke-width: 2.2; opacity: 1; }
+.fg-edges .is-hot.is-cross .fg-edge { stroke-width: 1.8; }
+.fg-edges .is-faded .fg-edge { stroke: var(--gridline); }
+.fg-edges .is-faded.is-cross .fg-edge { opacity: 0.25; }
+
+.fg-node { cursor: pointer; }
+.fg-box {
+  fill: var(--surface-2); stroke: var(--border); stroke-width: 1;
+  transition: stroke 120ms ease, fill 120ms ease;
+}
+.fg-node:hover .fg-box { stroke: var(--axis); }
+.fg-node:focus { outline: none; }
+.fg-node:focus-visible .fg-box { stroke: var(--accent); stroke-width: 2; }
+.fg-node.is-selected .fg-box { fill: var(--surface-1); stroke: var(--accent); stroke-width: 2.4; }
+.fg-node.is-upstream .fg-box { stroke: var(--status-good); stroke-width: 1.8; }
+.fg-node.is-downstream .fg-box { stroke: var(--ramp-4); stroke-width: 1.8; stroke-dasharray: 4 3; }
+.fg-node.is-dimmed { opacity: 0.32; }
+
+.fg-title { font-size: 12.5px; font-weight: 600; fill: var(--text-primary); }
+.fg-id { font-size: 10.5px; fill: var(--text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.fg-meta { font-size: 10.5px; fill: var(--text-secondary); }
+.fg-provides { font-size: 10px; fill: var(--status-good); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* ── dependency panel ───────────────────────────────────────────────────── */
+.fm-deps {
+  display: grid; grid-template-columns: 1.25fr 0.9fr 1.1fr 1.15fr; gap: 20px;
+  padding: 14px 16px; border-bottom: 1px solid var(--border); background: var(--surface-2);
+}
+@media (max-width: 1200px) { .fm-deps { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 720px) { .fm-deps { grid-template-columns: 1fr; } }
+.fm-deps h4 {
+  margin: 0 0 6px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-muted);
+}
+.fm-deps-col + .fm-deps-col h4:not(:first-child) { margin-top: 12px; }
+.fm-deps p { margin: 0; font-size: 12.5px; }
+
+.fm-dep-list { list-style: none; margin: 0; padding: 0; }
+.fm-dep { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 12px; padding: 2px 0; }
+.fm-dep-why { color: var(--text-muted); font-size: 11.5px; }
+.fm-dep-alt { color: var(--text-muted); font-size: 11.5px; }
+.fm-dep-seeded code { color: var(--status-warning); }
+
+.fm-dep-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; color: var(--accent); text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.fm-dep-link:hover { color: var(--text-primary); }
+.fm-dep-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.fm-provides-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.fm-provides-list code { color: var(--status-good); }
+
+.fm-run-order { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; }
+.fm-run-order li { display: inline-flex; align-items: baseline; gap: 4px; }
+.fm-run-order li.is-target .fm-dep-link { color: var(--text-primary); font-weight: 700; text-decoration: none; }
+.fm-run-arrow { color: var(--text-muted); font-size: 11px; }
+
+.fm-flow-list { list-style: none; margin: 0 0 4px; padding: 0; font-size: 12px; }
+.fm-flow-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 2px 0; }

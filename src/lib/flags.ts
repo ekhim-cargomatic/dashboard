@@ -11,6 +11,12 @@
  *   ?ff=training,notion            several at once
  *   ?ff=               clear all overrides
  *
+ * `qa` additionally answers to its own shorthand, because that is what people
+ * actually paste at each other:
+ *
+ *   ?qa=1              turn on   (also qa=on, qa=true, or bare ?qa)
+ *   ?qa=0              turn off  (also qa=off, qa=false)
+ *
  * Several spellings are accepted on purpose: the explicit `-on`/`-off` suffix is
  * the one worth typing and sharing, but a bare name and a `-` prefix are the
  * forms people reach for by habit, and silently ignoring them looks like the flag
@@ -26,7 +32,7 @@
  * which is what lib/training.ts does.
  */
 
-export const FLAGS = ['training', 'notion'] as const;
+export const FLAGS = ['training', 'notion', 'qa'] as const;
 export type FlagName = (typeof FLAGS)[number];
 
 const STORAGE_KEY = 'qa-flags';
@@ -86,6 +92,15 @@ export function resolveFlags(
   const stored = readStored();
 
   const params = new URLSearchParams(window.location.search);
+
+  // `?qa=1` — a dedicated shorthand for the one flag people share by link.
+  // Read before `ff` so an explicit `?ff=-qa` in the same URL still wins.
+  if (params.has('qa')) {
+    const raw = (params.get('qa') ?? '').trim().toLowerCase();
+    stored.qa = raw === '' || raw === '1' || raw === 'on' || raw === 'true' || raw === 'yes';
+    writeStored(stored);
+  }
+
   if (params.has('ff')) {
     const raw = params.get('ff') ?? '';
     if (raw.trim() === '') {

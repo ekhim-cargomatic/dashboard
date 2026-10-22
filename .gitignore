@@ -21,3 +21,6 @@ data/
 # Generated Atlas output — feature names and ticket ids; repo is public
 atlas.json
 atlas.html
+
+# Scratch holding pen — source tarballs and anything on its way out
+_to_delete/
