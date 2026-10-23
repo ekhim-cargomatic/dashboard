@@ -9,6 +9,7 @@ import {
   mutatingNodes,
   unverifiedWrites,
   type Flow,
+  type GraphNode,
 } from '../lib/flow';
 
 /**
@@ -54,6 +55,23 @@ function bow(x1: number, y1: number, x2: number, y2: number, long: boolean): str
   return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
 }
 
+/**
+ * The variant as a badge, not a sentence.
+ *
+ * `leg_management_version === 2` is 28 characters and the chunk id sits on the
+ * same line, so printed in full it lands on top of it. Initials and the value
+ * fit; the tooltip and the detail panel carry the real thing.
+ */
+function variantBadge(variant: { field: string; test: string }): string {
+  const initials = variant.field
+    .split(/[_\s]+|(?=[A-Z])/)
+    .filter(Boolean)
+    .map((part) => part[0].toUpperCase())
+    .join('');
+  const value = variant.test.replace(/[=\s]+/g, '').replace('!', '≠');
+  return `${initials} ${value || variant.test}`;
+}
+
 /** The bottom-left line of a node. */
 function meta(chunk: { nodes: unknown[] }, writes: number, gaps: number): string {
   return `${chunk.nodes.length} steps · ${writes}w${gaps > 0 ? ` · ${gaps} unverified` : ''}`;
@@ -64,6 +82,12 @@ function meta(chunk: { nodes: unknown[] }, writes: number, gaps: number): string
  * give way rather than overprint it. Two variables and a long step count do not
  * both fit in 188px; the tooltip carries the full list either way.
  */
+/** Trim a label to the pixels available, with an ellipsis if it had to give. */
+function fit(text: string, room: number, charWidth: number): string {
+  const max = Math.floor(room / charWidth);
+  return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1))}…`;
+}
+
 function providesLabel(provides: string[], metaText: string): string {
   const CH = 5.6;
   const room = NODE_W - 24 - metaText.length * 5.9 - 8;
@@ -72,6 +96,56 @@ function providesLabel(provides: string[], metaText: string): string {
   const short = provides.length > 1 ? `{${provides[0]}} +${provides.length - 1}` : full;
   if (short.length * CH <= room) return short;
   return `+${provides.length}`;
+}
+
+/**
+ * Who can run the selected chunk, on the canvas.
+ *
+ * The detail panel below already lists the role checks, but answering "can this
+ * person do this" meant selecting a node, looking away from the tree, reading,
+ * and looking back — and the question is usually asked about several chunks in
+ * a row. This puts the answer next to the node you just clicked. It is an HTML
+ * overlay rather than SVG so it can wrap text and sit above everything without
+ * fighting the node z-order.
+ */
+function PermissionCard({ node }: { node: GraphNode }) {
+  const access = node.chunk.access;
+  if (!access) return null;
+  const roles = [...new Set((access.requires ?? []).flatMap((r) => r.roles))];
+  return (
+    <div
+      className="fg-perm"
+      style={{ left: node.x, top: node.y + NODE_H + 10, width: NODE_W * 2 }}
+      role="note"
+    >
+      <div className="fg-perm-head">
+        <span className={`fm-portal fm-portal-${access.portal}`}>{access.portal}</span>
+        {node.chunk.platform && <span className="fm-platform">{node.chunk.platform}</span>}
+        {node.chunk.variant && (
+          <code className="fm-variant-test">
+            {node.chunk.variant.field} {node.chunk.variant.test}
+          </code>
+        )}
+      </div>
+      {roles.length > 0 ? (
+        <>
+          <div className="fg-perm-roles">
+            {roles.map((role) => <code key={role} className="fm-role">{role}</code>)}
+          </div>
+          <ul className="fg-perm-list">
+            {(access.requires ?? []).map((req) => (
+              <li key={`${req.guard}-${req.source}`}>
+                <span className="fg-perm-gates">{req.gates}</span>
+                <code>{req.guard}</code>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className="fg-perm-open">No role check in the code — any signed-in user of this portal.</p>
+      )}
+    </div>
+  );
 }
 
 export function FlowGraph({ flow, selected, onSelect }: Props) {
@@ -158,6 +232,7 @@ export function FlowGraph({ flow, selected, onSelect }: Props) {
       </div>
 
       <div className="fg-scroll" ref={scroller}>
+        <div className="fg-canvas" style={{ width: layout.width, height: layout.height }}>
         <svg
           className="fg"
           width={layout.width}
@@ -225,7 +300,9 @@ export function FlowGraph({ flow, selected, onSelect }: Props) {
               return (
                 <g
                   key={n.id}
-                  className={`fg-node ${state}`}
+                  className={`fg-node fg-portal-${n.chunk.access?.portal ?? 'admin'}`
+                    + `${n.chunk.platform ? ' is-mobile' : ''}`
+                    + `${n.chunk.variant ? ' is-variant' : ''} ${state}`}
                   transform={`translate(${n.x} ${n.y})`}
                   onClick={() => onSelect(n.id)}
                   role="button"
@@ -240,13 +317,35 @@ export function FlowGraph({ flow, selected, onSelect }: Props) {
                   <title>
                     {`${n.chunk.name}\n${n.chunk.nodes.length} steps · ${writes} writes`
                       + (deps ? `\nneeds ${deps} chunk${deps === 1 ? '' : 's'}` : '')
-                      + (n.chunk.provides?.length ? `\nprovides ${n.chunk.provides.join(', ')}` : '')}
+                      + (n.chunk.provides?.length ? `\nprovides ${n.chunk.provides.join(', ')}` : '')
+                      + (n.chunk.access ? `\n${n.chunk.access.portal} portal`
+                          + (n.chunk.access.gated
+                              ? ` · roles: ${[...new Set((n.chunk.access.requires ?? [])
+                                  .flatMap((r) => r.roles))].join(', ')}`
+                              : ' · no role check')
+                        : '')
+                      + (n.chunk.variant
+                          ? `\nonly when ${n.chunk.variant.field} ${n.chunk.variant.test}`
+                          : '')}
                   </title>
                   <rect className="fg-box" width={NODE_W} height={NODE_H} rx="10" />
+                  <rect className="fg-portal-bar" width="4" height={NODE_H} rx="2" />
+                  {n.chunk.variant && (
+                    <text className="fg-variant" x={NODE_W - 12} y="41" textAnchor="end">
+                      {variantBadge(n.chunk.variant)}
+                    </text>
+                  )}
+                  {n.chunk.platform && (
+                    <text className="fg-platform" x={NODE_W - 12} y="24" textAnchor="end">mobile</text>
+                  )}
                   <text className="fg-title" x="12" y="24">
                     {n.chunk.name.length > 26 ? `${n.chunk.name.slice(0, 25)}…` : n.chunk.name}
                   </text>
-                  <text className="fg-id" x="12" y="41">{n.id}</text>
+                  <text className="fg-id" x="12" y="41">
+                    {n.chunk.variant
+                      ? fit(n.id, NODE_W - 24 - variantBadge(n.chunk.variant).length * 5.6 - 8, 5.9)
+                      : n.id}
+                  </text>
                   <text className="fg-meta" x="12" y="57">{meta(n.chunk, writes, gaps)}</text>
                   {n.chunk.provides?.length ? (
                     <text className="fg-provides" x={NODE_W - 12} y="57" textAnchor="end">
@@ -258,6 +357,8 @@ export function FlowGraph({ flow, selected, onSelect }: Props) {
             })}
           </g>
         </svg>
+        {selected && pos.get(selected) && <PermissionCard node={pos.get(selected)!} />}
+        </div>
       </div>
     </div>
   );

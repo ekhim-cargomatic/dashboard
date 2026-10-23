@@ -116,6 +116,38 @@ export interface ChunkDependency {
   why?: string;
 }
 
+export interface RoleRequirement {
+  /** The role strings the guard checks. Any one of them is enough. */
+  roles: string[];
+  /** The SessionStore guard, e.g. SessionStore.isBillingStatusAdmin(). */
+  guard: string;
+  /** What it gates, in the words of the screen. */
+  gates: string;
+  /** repo-relative file:line of the call that does the checking. */
+  source: string;
+}
+
+export interface ChunkVariant {
+  /** The field on the record under test that decides whether this renders. */
+  field: string;
+  /** The comparison, e.g. "=== 2". */
+  test: string;
+  /** The function in the app that performs it. */
+  guard: string;
+  /** repo-relative file:line where that function is defined. */
+  source: string;
+  /** What each side of the branch draws, when it is worth naming. */
+  renders?: string;
+}
+
+export interface ChunkAccess {
+  portal: 'admin' | 'carrier' | 'shipper' | 'driver';
+  /** False means nothing in the code gates it — not that it is open by design. */
+  gated: boolean;
+  requires?: RoleRequirement[];
+  note?: string;
+}
+
 export interface FlowChunk {
   id: string;
   name: string;
@@ -129,6 +161,12 @@ export interface FlowChunk {
   provides?: string[];
   /** Hard prerequisites. Distinct from `edges`, which is narrative order. */
   dependsOn?: ChunkDependency[];
+  /** Which portal signs in, and which roles the code checks. */
+  access?: ChunkAccess;
+  /** Set when the chunk only renders for one value of a field on the record. */
+  variant?: ChunkVariant;
+  /** Set on chunks whose selectors are Appium locators rather than CSS. */
+  platform?: 'android' | 'ios';
   nodes: FlowNode[];
 }
 
@@ -267,6 +305,28 @@ export function runOrder(flow: Flow, id: string): string[] {
   return [...dependencyClosure(flow, id), id];
 }
 
+
+/** Every role the flow mentions, deduped — the filter's option list. */
+export function allRoles(flow: Flow): string[] {
+  const out = new Set<string>();
+  for (const chunk of flow.chunks) {
+    for (const req of chunk.access?.requires ?? []) {
+      for (const role of req.roles) out.add(role);
+    }
+  }
+  return [...out].sort();
+}
+
+/** Chunks a user holding exactly `roles` could drive, by portal. */
+export function reachableWith(flow: Flow, role: string): Set<string> {
+  const out = new Set<string>();
+  for (const chunk of flow.chunks) {
+    const reqs = chunk.access?.requires ?? [];
+    if (reqs.length === 0 || reqs.some((r) => r.roles.includes(role))) out.add(chunk.id);
+  }
+  return out;
+}
+
 // ─────────────────────────────────────────────────────────────────── layout ──
 
 export interface GraphNode {
@@ -344,13 +404,19 @@ export function layoutTree(flow: Flow): GraphLayout {
     .filter((e) => idSet.has(e[0]) && idSet.has(e[1]))
     .map((e) => ({ from: e[0], to: e[1], label: e[2] }));
 
+  // A portal entry is a chunk nothing has to happen before: the four sign-ins.
+  // They are roots, full stop. Hanging the carrier sign-in off the admin one
+  // because an admin registers carriers read as "sign in as admin first, then
+  // as a carrier", which is not how anyone uses the product — you pick a
+  // portal and start there. The register-then-sign-in relationship is real but
+  // it is a cross-link, not a prerequisite.
   const isPortal = (id: string) => (byId.get(id)?.dependsOn?.length ?? 0) === 0;
 
   // Candidate parents, each with a tier: 0 data dep, 1 narrative edge, 2 session.
   const cands = new Map<string, Map<string, number>>(ids.map((id) => [id, new Map()]));
   const offer = (to: string, from: string, tier: number) => {
     if (from === to || !idSet.has(from) || !idSet.has(to)) return;
-    if (isPortal(to) && !isPortal(from)) return;
+    if (isPortal(to)) return;
     const m = cands.get(to)!;
     const cur = m.get(from);
     if (cur === undefined || tier < cur) m.set(from, tier);
@@ -378,13 +444,67 @@ export function layoutTree(flow: Flow): GraphLayout {
     if (!moved) break;
   }
 
+  // Deepest-wins is right for a chunk that follows from something, and wrong
+  // for one you can simply open. Shorthaul booking needs nothing but a login,
+  // yet an edge from quotes ("book from a quote") is deeper than the edge from
+  // the sign-in, so deepest-wins filed it four levels down behind markets and
+  // pricing — an entry point buried under one of the ways to reach it. A chunk
+  // with no data dependency that the portal leads to directly is an entry
+  // point: it hangs off the portal, and the other routes in stay cross-links.
+  const hasData = (id: string) =>
+    (byId.get(id)?.dependsOn ?? []).some((d) => d.kind === 'data' && d.chunk);
   const parent = new Map<string, string | null>();
   for (const id of ids) {
     const opts = [...cands.get(id)!.entries()]
-      .filter(([from]) => depth.get(from)! < depth.get(id)!)
-      .sort((a, b) =>
-        depth.get(b[0])! - depth.get(a[0])! || a[1] - b[1] || a[0].localeCompare(b[0]));
+      .filter(([from]) => depth.get(from)! < depth.get(id)!);
+    const entry = opts.find(([from, tier]) => tier === 1 && isPortal(from));
+    if (entry && !hasData(id)) {
+      parent.set(id, entry[0]);
+      continue;
+    }
+    opts.sort((a, b) =>
+      depth.get(b[0])! - depth.get(a[0])! || a[1] - b[1] || a[0].localeCompare(b[0]));
     parent.set(id, opts.length > 0 ? opts[0][0] : null);
+  }
+
+  // The picture must not lie about prerequisites. A narrative edge can be
+  // deeper than a real data dependency — driver.stop reaches carrier.stop,
+  // which would hang carrier.stop off the phone and leave carrier.pending, the
+  // chunk that actually produces its {jobId}, somewhere else entirely. So after
+  // the first pass, any chunk whose data dependencies are not all above it is
+  // demoted onto its deepest data dependency, and depth is recomputed from the
+  // parents that survive.
+  // Session counts as hard as data. Without it shipper.portal hangs off
+  // accessorials.request — a real narrative edge, and deeper — leaving the
+  // shipper sign-in with nothing under it, which reads as "the shipper portal
+  // is reached from the admin side".
+  const hardDeps = new Map<string, string[]>(flow.chunks.map((c) => [
+    c.id,
+    (c.dependsOn ?? [])
+      .filter((d) => (d.kind === 'data' || d.kind === 'session') && d.chunk)
+      .map((d) => d.chunk!),
+  ]));
+  const ancestors = (id: string) => {
+    const out = new Set<string>();
+    for (let cur = parent.get(id) ?? null; cur && !out.has(cur); cur = parent.get(cur) ?? null) {
+      out.add(cur);
+    }
+    return out;
+  };
+  for (let pass = 0; pass < ids.length; pass += 1) {
+    let moved = false;
+    for (const id of ids) {
+      const needs = hardDeps.get(id) ?? [];
+      if (needs.length === 0) continue;
+      const above = ancestors(id);
+      if (needs.every((d) => above.has(d))) continue;
+      const best = [...needs].sort((a, b) => depth.get(b)! - depth.get(a)! || a.localeCompare(b))[0];
+      if (best && parent.get(id) !== best && !ancestors(best).has(id)) {
+        parent.set(id, best);
+        moved = true;
+      }
+    }
+    if (!moved) break;
   }
 
   const children = new Map<string, string[]>(ids.map((id) => [id, []]));
@@ -396,7 +516,21 @@ export function layoutTree(flow: Flow): GraphLayout {
   }
   const order = (a: string, b: string) => a.localeCompare(b);
   for (const list of children.values()) list.sort(order);
-  roots.sort(order);
+  // Roots are the portals, in the order someone would work through them.
+  const PORTAL_ORDER = ['admin', 'carrier', 'shipper', 'driver'];
+  const portalRank = (id: string) => {
+    const rank = PORTAL_ORDER.indexOf(byId.get(id)?.access?.portal ?? 'admin');
+    return rank === -1 ? PORTAL_ORDER.length : rank;
+  };
+  roots.sort((a, b) => portalRank(a) - portalRank(b) || order(a, b));
+
+  // Depth now comes from the tree rather than from the candidate graph, so a
+  // demoted chunk and everything under it move with it.
+  const walk = (id: string, d: number) => {
+    depth.set(id, d);
+    for (const kid of children.get(id)!) walk(kid, d + 1);
+  };
+  for (const r of roots) walk(r, 0);
 
   // Leaves take the next free row; a parent centres on its own children.
   const y = new Map<string, number>();

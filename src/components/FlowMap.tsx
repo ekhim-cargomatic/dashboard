@@ -12,6 +12,8 @@ import {
   mutatingNodes,
   unverifiedWrites,
   type ApiCall,
+  type ChunkAccess,
+  type ChunkVariant,
   type ChunkDependency,
   type Flow,
   type FlowChunk,
@@ -249,6 +251,72 @@ function DepLine({ dep, onSelect }: { dep: ChunkDependency; onSelect: (id: strin
  * exercise this chunk on its own", which is the question the chunking exists
  * to make answerable.
  */
+
+/**
+ * Who can run this chunk.
+ *
+ * The roles are not a guess at who ought to have access — each one is a guard
+ * the admin client really calls, with the line that calls it, so a role that
+ * quietly stopped being checked shows up as a validator failure rather than as
+ * a test that passes for the wrong reason. A chunk with no guard says so
+ * plainly instead of being left blank.
+ */
+/**
+ * A chunk that only exists for one value of a field.
+ *
+ * Worth its own band rather than a line in the note: a fixture seeded on the
+ * wrong side of the switch makes the chunk look broken when it is simply not
+ * rendered, and that is a slow thing to work out from a failing selector.
+ */
+function Variant({ variant }: { variant?: ChunkVariant }) {
+  if (!variant) return null;
+  return (
+    <div className="fm-variant">
+      <span className="fm-variant-tag">only when</span>
+      <code className="fm-variant-test">{variant.field} {variant.test}</code>
+      <span className="fm-variant-why">
+        <code>{variant.guard}</code>
+        {variant.renders && <> · renders {variant.renders}</>}
+      </span>
+      <span className="fm-variant-src muted">{variant.source}</span>
+    </div>
+  );
+}
+
+function Access({ access }: { access?: ChunkAccess }) {
+  if (!access) return null;
+  return (
+    <div className="fm-access">
+      <div className="fm-access-head">
+        <span className={`fm-portal fm-portal-${access.portal}`}>{access.portal}</span>
+        {access.gated ? (
+          <span className="fm-access-count">
+            {access.requires?.length} role check{access.requires?.length === 1 ? '' : 's'}
+          </span>
+        ) : (
+          <span className="fm-access-open">no role check in the code</span>
+        )}
+      </div>
+      {access.note && <p className="fm-access-note muted">{access.note}</p>}
+      {access.requires && access.requires.length > 0 && (
+        <ul className="fm-access-list">
+          {access.requires.map((req) => (
+            <li key={`${req.guard}-${req.source}`}>
+              <div className="fm-access-roles">
+                {req.roles.map((role) => <code key={role} className="fm-role">{role}</code>)}
+              </div>
+              <div className="fm-access-why">
+                {req.gates} · <code>{req.guard}</code>
+              </div>
+              <div className="fm-access-src muted">{req.source}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function Dependencies({ flow, chunk, onSelect }: {
   flow: Flow; chunk: FlowChunk; onSelect: (id: string) => void;
 }) {
@@ -510,6 +578,7 @@ Re-check selectors against the Playwright page objects with
                     <code>{chunk.id}</code>
                     {chunk.page && <> · {chunk.page}</>}
                     {chunk.sourceFile && <> · <code>{chunk.sourceFile}</code></>}
+                    {chunk.platform && <> · <span className="fm-platform">{chunk.platform}</span></>}
                   </p>
                   <p className="fm-sub">
                     entry <code>{chunk.entry}</code> · exit <code>{chunk.exit}</code>
@@ -518,6 +587,8 @@ Re-check selectors against the Playwright page objects with
                 </div>
                 <Copy text={JSON.stringify(chunk, null, 2)} label="chunk JSON" />
               </div>
+              <Variant variant={chunk.variant} />
+              <Access access={chunk.access} />
               <Dependencies flow={flow} chunk={chunk} onSelect={setSelected} />
               <ol className="fm-nodes">
                 {steps.map(({ node, depth }) => (

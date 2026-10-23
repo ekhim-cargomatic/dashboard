@@ -43,7 +43,8 @@ await page.getByRole('button', { name: 'App flow' }).click();
 await page.waitForSelector('.fg-node', { timeout: 15000 });
 
 const chunks = await page.$$eval('.fg-node', (ns) => ns.length);
-chunks === 30 ? ok('every chunk is a node', String(chunks)) : bad('every chunk is a node', String(chunks));
+const expected = (await (await fetch(`${BASE}/qa-flow/cargomatic.json`)).json()).chunks.length;
+chunks === expected ? ok('every chunk is a node', String(chunks)) : bad('every chunk is a node', `${chunks} of ${expected}`);
 
 // Reconstruct the drawn graph from edge titles.
 const edges = await page.$$eval('.fg-edges > g', (gs) => gs.map((g) => ({
@@ -55,15 +56,25 @@ const parse = (t) => { const m = t.match(/^([\w.]+) → ([\w.]+)/); return m ? [
 const tree = edges.filter((e) => e.cls.includes('is-tree')).map((e) => parse(e.title)).filter(Boolean);
 const cross = edges.filter((e) => e.cls.includes('is-cross')).map((e) => parse(e.title)).filter(Boolean);
 
-tree.length === 29 ? ok('tree has one parent per chunk', `${tree.length} tree edges, 30 chunks`)
-                   : bad('tree has one parent per chunk', `${tree.length} tree edges`);
+tree.length === chunks - 4 ? ok('one parent per chunk, four roots', `${tree.length} tree edges, ${chunks} chunks`)
+                   : bad('one parent per chunk, four roots', `${tree.length} tree edges, ${chunks} chunks`);
 cross.length > 0 ? ok('cross-links drawn separately', String(cross.length)) : bad('cross-links drawn separately');
 
 const parent = new Map(tree.map(([a, b]) => [b, a]));
-const roots = [...new Set(tree.flatMap(([a, b]) => [a, b]))].filter((id) => !parent.has(id));
-roots.length === 1 ? ok('single root', roots.join(',')) : bad('single root', roots.join(','));
+const ids0 = await page.$$eval('.fg-node .fg-id', (ts) => ts.map((t) => t.textContent));
+const roots = ids0.filter((id) => !parent.has(id));
+roots.length === 4 && roots.includes('auth') && roots.includes('carrier.auth')
+  && roots.includes('shipper.auth') && roots.includes('driver.auth')
+  ? ok('one root per portal', roots.join(', '))
+  : bad('one root per portal', roots.join(', '));
 
 const chain = (id) => { const c = []; for (let x = parent.get(id); x; x = parent.get(x)) c.push(x); return c; };
+
+// A sign-in must not hang off another sign-in.
+const signIns = ['auth', 'carrier.auth', 'shipper.auth', 'driver.auth'];
+signIns.every((id) => chain(id).length === 0)
+  ? ok('no sign-in sits under another')
+  : bad('no sign-in sits under another', signIns.map((id) => `${id} ← ${chain(id).join(' ← ')}`).join(' | '));
 
 // The point of the rewrite.
 const sh = chain('shorthaul.book');
@@ -86,10 +97,10 @@ let reaches = 0;
 const ids = await page.$$eval('.fg-node .fg-id', (ts) => ts.map((t) => t.textContent));
 for (const id of ids) {
   const c = chain(id);
-  if (id === roots[0] || c[c.length - 1] === roots[0]) reaches += 1;
+  if (roots.includes(id) || roots.includes(c[c.length - 1])) reaches += 1;
 }
-reaches === ids.length ? ok('every chunk walks up to the root', `${reaches}/${ids.length}`)
-                       : bad('every chunk walks up to the root', `${reaches}/${ids.length}`);
+reaches === ids.length ? ok('every chunk walks up to a portal root', `${reaches}/${ids.length}`)
+                       : bad('every chunk walks up to a portal root', `${reaches}/${ids.length}`);
 
 // Declared data dependencies must be tree ancestors, or the picture lies.
 const flow = await (await fetch(`${BASE}/qa-flow/cargomatic.json`)).json();
@@ -138,6 +149,73 @@ await page.waitForTimeout(400);
 const up2 = await page.$$eval('.fg-node.is-upstream .fg-id', (ts) => ts.map((t) => t.textContent));
 up2.some((id) => id.startsWith('order.')) ? bad('shorthaul ancestry is clean', up2.join(','))
                                           : ok('shorthaul ancestry is clean', up2.join(', '));
+
+// Access panel: a role-gated chunk shows its guards, an ungated one says so.
+await page.locator('.fg-node', { hasText: 'order.billing' }).first().click();
+await page.waitForTimeout(400);
+const roles = await page.$$eval('.fm-role', (ns) => ns.map((x) => x.textContent));
+roles.includes('billing_status_admin') ? ok('role requirements shown', roles.join(', '))
+                                       : bad('role requirements shown', roles.join(', '));
+const srcs = await page.$$eval('.fm-access-src', (ns) => ns.map((x) => x.textContent));
+srcs.every((t) => /:\d+$/.test(t)) && srcs.length > 0
+  ? ok('every role cites a file and line', `${srcs.length} citations`)
+  : bad('every role cites a file and line', srcs.join(' | '));
+await page.locator('.fg-node', { hasText: 'documents' }).first().click();
+await page.waitForTimeout(400);
+const open = await page.$$eval('.fm-access-open', (ns) => ns.length);
+open === 1 ? ok('ungated chunks say so') : bad('ungated chunks say so', String(open));
+const portals = await page.$$eval('.fg-node', (ns) => ns.filter((x) => /fg-portal-/.test(x.getAttribute('class'))).length);
+portals === chunks ? ok('every node carries a portal', String(portals)) : bad('every node carries a portal', String(portals));
+const mobile = await page.$$eval('.fg-node.is-mobile', (ns) => ns.length);
+mobile >= 5 ? ok('mobile chunks marked', String(mobile)) : bad('mobile chunks marked', String(mobile));
+
+// Leg management is v2 only: it must not hang off the legacy order screen.
+const legsParent = parent.get('order.legs');
+legsParent === 'order.detail.v2' || !chain('order.legs').includes('order.detail.v1')
+  ? ok('leg management is not under the legacy order', `order.legs ← ${chain('order.legs').join(' ← ')}`)
+  : bad('leg management is not under the legacy order', String(legsParent));
+await page.locator('.fg-node', { hasText: 'order.legs' }).first().click();
+await page.waitForTimeout(400);
+const variant = await page.$$eval('.fm-variant-test', (ns) => ns.map((x) => x.textContent));
+variant.some((t) => t.includes('leg_management_version'))
+  ? ok('the version switch is stated', variant.join(', '))
+  : bad('the version switch is stated', variant.join(', '));
+const dashed = await page.$$eval('.fg-node.is-variant', (ns) => ns.length);
+dashed >= 3 ? ok('version-gated chunks marked on the tree', String(dashed))
+            : bad('version-gated chunks marked on the tree', String(dashed));
+
+// Node labels must not sit on top of each other. Measure the two that share
+// line 2 — the chunk id and the variant badge — and assert they don't overlap.
+const collisions = await page.$$eval('.fg-node', (ns) => ns.flatMap((node) => {
+  const id = node.querySelector('.fg-id');
+  const badge = node.querySelector('.fg-variant');
+  if (!id || !badge) return [];
+  const a = id.getBoundingClientRect();
+  const b = badge.getBoundingClientRect();
+  return a.right > b.left + 0.5 ? [`${id.textContent} / ${badge.textContent}`] : [];
+}));
+collisions.length === 0
+  ? ok('no overlapping node labels')
+  : bad('no overlapping node labels', collisions.join(' | '));
+
+// Permissions have to be readable from the tree itself, not only the panel.
+const byId = (id) => page.locator('.fg-node')
+  .filter({ has: page.locator('.fg-id', { hasText: new RegExp(`^${id.replace(/\./g, '\\.')}$`) }) })
+  .first();
+await byId('tariffs').click();
+await page.waitForTimeout(400);
+const card = await page.$$eval('.fg-perm .fm-role', (ns) => ns.map((x) => x.textContent));
+card.length === 2 && card.includes('admin') && card.includes('tariff')
+  ? ok('permissions shown on the tree', card.join(', '))
+  : bad('permissions shown on the tree', card.join(', '));
+await byId('documents').click();
+await page.waitForTimeout(400);
+const openCard = await page.$$eval('.fg-perm-open', (ns) => ns.length);
+openCard === 1 ? ok('ungated chunks say so on the tree') : bad('ungated chunks say so on the tree', String(openCard));
+await byId('markets').click();
+await page.waitForTimeout(400);
+const mk = await page.$$eval('.fg-perm .fm-role', (ns) => ns.map((x) => x.textContent));
+mk.length === 1 && mk[0] === 'admin' ? ok('markets is admin-gated', mk.join(', ')) : bad('markets is admin-gated', mk.join(', '));
 
 errs.length === 0 ? ok('no page errors') : bad('no page errors', errs.slice(0, 3).join(' | '));
 

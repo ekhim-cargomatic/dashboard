@@ -24,3 +24,6 @@ atlas.html
 
 # Scratch holding pen — source tarballs and anything on its way out
 _to_delete/
+
+# Python bytecode from scripts/validate-flow.py
+__pycache__/

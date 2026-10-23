@@ -1,38 +1,13 @@
 {
-  "flows": [
-    {
-      "file": "cargomatic.json",
-      "id": "cargomatic",
-      "name": "Cargomatic \u2014 admin, carrier, shipper & driver",
-      "status": "verified",
-      "note": "30 chunks, 812 steps. 716/716 selectors byte-identical to the page objects and 221/221 endpoints matched against the monolith route table as of the last scripts/validate-flow.py run."
-    }
-  ],
-  "planned": [
-    {
-      "id": "profiles",
-      "name": "Shipper & carrier profiles, admin users, markets, equipment",
-      "source": "pages/adminPortal/{shipper,carrier,registered_users,markets,equipment}/*.py (~340 selectors)"
-    },
-    {
-      "id": "drayage-shipment-detail",
-      "name": "Drayage shipment detail \u2014 the 268-selector booking_details_page",
-      "source": "pages/adminPortal/legacy_drayage_order/booking_details_page.py"
-    },
-    {
-      "id": "shorthaul-shipment-tables",
-      "name": "Shorthaul shipper/carrier/accounting tables on booking details",
-      "source": "pages/adminPortal/legacy_drayage_order/booking_details_{shipper,carrier,accounting}_*.py"
-    },
-    {
-      "id": "tools",
-      "name": "Tools \u2014 bulk cancel, bulk rerate, reference number addition",
-      "source": "pages/adminPortal/tools/tools_page.py"
-    },
-    {
-      "id": "mobile",
-      "name": "Driver mobile app",
-      "source": "cargomatic/appium-automation (separate suite)"
-    }
-  ]
+ "flows": [
+  {
+   "file": "cargomatic.json",
+   "id": "cargomatic",
+   "name": "Cargomatic \u2014 admin, carrier, shipper & driver",
+   "status": "verified",
+   "note": "48 chunks, 1973 steps. 1853/1853 selectors byte-identical to the page objects (web and Appium), 277/277 endpoints matched against the monolith route table, every role check resolved to the SessionStore guard and line that performs it, as of the last scripts/validate-flow.py run. That run also prints which page-object constants are still unmapped."
+  }
+ ],
+ "planned": [],
+ "note": "Nothing is on the not-mapped list any more. That is not the same as finished: run scripts/validate-flow.py for the per-page-object coverage, which is the honest measure of what is left."
 }
