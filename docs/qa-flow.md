@@ -41,6 +41,19 @@ The choice is remembered per browser, so a link with `?qa=1` shares it. `?ff=qa-
 to also answer to its own shorthand. Turning it on adds an **App flow** tab beside
 **Runs**; the map takes the full window rather than the dashboard's reading column.
 
+The tree is the page — it takes whatever height the window has left, and **full
+screen** in its toolbar hands it the whole display. Drag the background to pan,
+⌘/ctrl-scroll (or pinch) to zoom about the cursor, or use the `−  100%  +  fit`
+control; `+`, `−`, `0` and `f` do the same from the keyboard. **fit** shows all 49
+chunks at once, which is too small to read and the right way to see the shape.
+
+Clicking a chunk opens its detail over the map rather than below it: what gates
+it, what it needs, what needs it, and every step with its selector and API calls.
+Following a dependency link from inside swaps the dialog to that chunk and moves
+the map behind it, so closing leaves you where that chain ended. Escape or the
+backdrop closes it, and the pan and zoom are untouched. **about** carries the
+flow variables and the not-yet-mapped list.
+
 The flag hides UI, not data. `public/qa-flow/` is served to anyone who asks for it.
 Nothing in there is sensitive — selectors and endpoint shapes, no credentials — but
 do not put a fixture password in it on the assumption the flag protects it.

@@ -1200,9 +1200,34 @@ button.btn.shot:hover {
    Full-bleed: the map is a working surface, not a report, so it uses the whole
    window rather than the dashboard's reading column.
 */
-.app.is-full { max-width: none; padding-left: 20px; padding-right: 20px; }
+/*
+   The map is the page. The shell stops scrolling and becomes a column whose
+   last row — the graph — takes whatever height is left, so the canvas is as
+   big as the window allows at every size instead of a fixed 56vh slot.
+*/
+.app.is-full {
+  max-width: none; padding: 20px 20px 16px;
+  height: 100vh; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.app.is-full > section.block { flex: 1; min-height: 0; display: flex; margin-top: 10px; }
+.app.is-full > .topbar { margin-bottom: 0; }
 
-.fm { display: flex; flex-direction: column; gap: 14px; }
+/*
+   On a laptop the chrome above the canvas was costing 40% of the window. The
+   content does not change — the padding, the gaps and the title do.
+*/
+@media (max-height: 860px) {
+  .app.is-full { padding: 10px 14px; }
+  .app.is-full > .topbar { padding: 8px 14px; }
+  .app.is-full > section.block { margin-top: 8px; }
+  .fm { gap: 8px; }
+  .fm-head h2 { font-size: 16px; }
+  .fm-head-controls { gap: 8px; }
+}
+@media (max-width: 1280px) { .fm-search { min-width: 200px; } }
+
+.fm { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0; min-height: 0; }
 
 .fm-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; }
 .fm-head h2 { margin: 0; font-size: 19px; }
@@ -1227,7 +1252,7 @@ button.btn.shot:hover {
 .fm-hit code { font-size: 11px; color: var(--text-muted); margin-right: 4px; }
 
 /* ── the spine ─────────────────────────────────────────────────────────── */
-.fm-body { display: flex; flex-direction: column; gap: 18px; }
+.fm-stage { flex: 1; min-height: 0; display: flex; }
 
 .fm-rail { position: sticky; top: 12px; display: flex; flex-direction: column; }
 .fm-rail-item { display: flex; flex-direction: column; }
@@ -1251,15 +1276,10 @@ button.btn.shot:hover {
 .fm-connector path { fill: none; stroke: var(--axis); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .fm-edge-label { font-size: 11px; color: var(--text-muted); font-style: italic; }
 
-.fm-planned { margin-top: 18px; padding: 12px 13px; border: 1px dashed var(--border); border-radius: var(--radius); }
-.fm-planned h3 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
-.fm-planned ul { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--text-secondary); }
+.fm-planned-list { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--text-secondary); }
+.fm-planned-list li { padding: 2px 0; }
 
 /* ── the detail ────────────────────────────────────────────────────────── */
-.fm-detail {
-  border: 1px solid var(--border); border-radius: var(--radius);
-  background: var(--surface-1); max-height: calc(100vh - 180px); overflow: auto;
-}
 .fm-detail-head {
   position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between;
   align-items: flex-start; gap: 16px; padding: 14px 16px;
@@ -1267,10 +1287,7 @@ button.btn.shot:hover {
 }
 .fm-detail-head h3 { margin: 0; font-size: 15px; }
 .fm-detail-head code { margin-right: 4px; }
-.fm-empty { padding: 28px 24px; }
-.fm-empty h3 { margin: 0 0 8px; font-size: 15px; }
-.fm-empty p { max-width: 70ch; font-size: 13px; }
-.fm-vars { margin: 18px 0 0; font-size: 12.5px; }
+.fm-vars { margin: 0 0 4px; font-size: 12.5px; }
 .fm-vars > div { display: flex; gap: 10px; padding: 3px 0; }
 .fm-vars dt { min-width: 90px; }
 .fm-vars dd { margin: 0; color: var(--text-secondary); }
@@ -1343,12 +1360,14 @@ button.btn.shot:hover {
    the shape: four entry points converge on the same accounting chunks, and
    several chunks have two or three predecessors.
 */
-.fm-graph {
+.fm-stage > .fg-wrap {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-1);
 }
-.fg-wrap { display: flex; flex-direction: column; }
+.fg-wrap { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+/* Native full screen: the wrap is the fullscreen element, so it owns the paint. */
+.fg-wrap:fullscreen { background: var(--surface-1); border-radius: 0; }
 .fg-tools {
   display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   padding: 8px 12px; border-bottom: 1px solid var(--border);
@@ -1358,9 +1377,34 @@ button.btn.shot:hover {
 .fg-toggle { cursor: pointer; user-select: none; }
 .fg-toggle input { margin: 0; }
 .fg-hint { margin-left: auto; }
+
+/* Zoom reads as one control, so the three buttons share a border. */
+.fg-zoom { display: inline-flex; align-items: stretch; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.fg-zoom button {
+  border: none; background: var(--surface-1); color: var(--text-secondary);
+  padding: 3px 9px; font-size: 12px; line-height: 1.5; cursor: pointer; font-family: inherit;
+}
+.fg-zoom button + button { border-left: 1px solid var(--border); }
+.fg-zoom button:hover { background: var(--ghost); color: var(--text-primary); }
+.fg-zoom-level { min-width: 46px; font-variant-numeric: tabular-nums; }
+.fg-zoom-fit { text-transform: lowercase; }
+.fg-fullscreen {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-1); color: var(--text-secondary);
+  padding: 3px 10px; font-size: 12px; cursor: pointer; font-family: inherit; white-space: nowrap;
+}
+.fg-fullscreen:hover { background: var(--ghost); color: var(--text-primary); }
 .fg-key-tree { stroke: var(--axis); stroke-width: 1.6; }
 .fg-key-cross { stroke: var(--text-muted); stroke-width: 1.4; stroke-dasharray: 4 3; }
-.fg-scroll { overflow: auto; max-height: 56vh; padding: 4px; }
+/*
+   Panning is the browser's: the canvas is sized to the scaled graph and the
+   svg inside it is transformed, so the scrollbars stay honest and arrow keys,
+   trackpads and shift-scroll all keep working for free.
+*/
+.fg-scroll { overflow: auto; flex: 1; min-height: 0; padding: 4px; cursor: grab; }
+.fg-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fg-scroll.is-panning { cursor: grabbing; user-select: none; }
+.fg-canvas { position: relative; }
 .fg { display: block; }
 
 .fg-edge { fill: none; stroke: var(--axis); stroke-width: 1.4; }
@@ -1487,21 +1531,47 @@ button.btn.shot:hover {
 .fg-node.is-variant .fg-box { stroke-dasharray: 5 3; }
 .fg-variant { font-size: 9px; fill: var(--ramp-4); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
-/* ── permissions, on the canvas ─────────────────────────────────────────── */
-.fg-canvas { position: relative; }
-.fg-perm {
-  position: absolute; z-index: 5;
-  border: 1px solid var(--accent); border-radius: 10px;
-  background: var(--surface-1); box-shadow: 0 6px 18px rgb(0 0 0 / 0.12);
-  padding: 10px 12px; font-size: 11.5px; pointer-events: none;
+/* ── the detail dialog ──────────────────────────────────────────────────── */
+/*
+   A real <dialog>, so the top layer puts it above the canvas — including the
+   canvas in native full screen, which an absolutely-positioned div could not
+   manage. Escape, the backdrop and focus return are the element's own.
+*/
+.fm-dialog {
+  border: none; padding: 0; background: transparent;
+  width: min(1100px, 94vw); max-width: none;
+  max-height: 90vh; height: 90vh;
+  margin: auto;
 }
-.fg-perm-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.fg-perm-roles { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
-.fg-perm-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
-.fg-perm-list li {
-  display: flex; gap: 8px; align-items: baseline; justify-content: space-between;
-  color: var(--text-secondary);
+.fm-dialog::backdrop { background: rgb(0 0 0 / 0.45); backdrop-filter: blur(2px); }
+.fm-dialog-about { width: min(720px, 94vw); height: auto; max-height: 80vh; }
+
+.fm-dialog-panel {
+  display: flex; flex-direction: column; height: 100%; max-height: 90vh;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-1); color: var(--text-primary);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.35);
+  overflow: hidden;
 }
-.fg-perm-list code { font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
-.fg-perm-gates { min-width: 0; }
-.fg-perm-open { margin: 8px 0 0; color: var(--text-secondary); font-style: italic; }
+.fm-dialog-body { overflow: auto; flex: 1; min-height: 0; }
+.fm-dialog-actions { display: flex; align-items: center; gap: 8px; }
+.fm-dialog-close {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-muted);
+  font-size: 12px; line-height: 1; padding: 4px 8px; cursor: pointer;
+}
+.fm-dialog-close:hover { color: var(--text-primary); border-color: var(--axis); }
+
+.fm-about { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.fm-about p { margin: 0; font-size: 13px; max-width: 80ch; }
+.fm-about h4 {
+  margin: 8px 0 0; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-muted);
+}
+
+.fm-about-btn {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-1); color: var(--text-secondary);
+  padding: 6px 12px; font-size: 12.5px; cursor: pointer; font-family: inherit;
+}
+.fm-about-btn:hover { background: var(--ghost); color: var(--text-primary); }
