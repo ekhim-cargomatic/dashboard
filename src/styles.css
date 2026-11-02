@@ -1627,7 +1627,7 @@ button.btn.shot:hover {
 .fm-run-play.is-empty:hover { background: var(--surface-1); color: var(--text-muted); }
 
 /* Centred, unlike the chunk drawer — it is a decision, not a document. */
-.fm-dialog-run { width: min(520px, 94vw); height: auto; max-height: 86vh; }
+.fm-dialog-run { width: min(760px, 94vw); height: auto; max-height: 88vh; }
 /* The shared panel is sized for the drawer, which fills its dialog. This one is
    as tall as what it has to say, so the footer sits under the content rather
    than at the bottom of an empty box. */
@@ -1684,3 +1684,24 @@ button.btn.shot:hover {
 .fm-run-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .fm-run-btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
 .fm-run-btn:disabled { opacity: 0.55; cursor: default; }
+
+/*
+   The build's own output, streamed while it runs.
+   behave prints a few hundred lines per run once --no-skipped is on; the panel
+   scrolls, follows the tail only when the reader is already at the bottom, and
+   colours just the scenario headings and failures. Highlighting most of a log
+   highlights nothing.
+*/
+.fm-run-log {
+  margin: 0; padding: 10px 12px; max-height: 40vh; overflow: auto;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word;
+  /* The log is the long tail of the dialog; let it take the slack. */
+  flex: 1; min-height: 120px;
+}
+.fm-run-log .fg-head { color: var(--text-primary); font-weight: 600; }
+.fm-run-log .fg-bad  { color: var(--status-critical); }
+.fm-run-log .fg-good { color: var(--success-text); }

@@ -126,6 +126,10 @@ export function resolve(chunk: FlowChunk): RunPlan {
 /** A build in flight, or the record of one that finished. */
 export interface RunHandle {
   buildId: string;
+  /** New log lines since the last poll — not the whole log. */
+  lines?: string[];
+  /** CloudWatch's forward cursor. Hand it back next poll to get only what is new. */
+  logToken?: string;
   /** CodeBuild's own phase — PROVISIONING, BUILD, COMPLETED … */
   phase: string;
   /** SUCCEEDED | FAILED | FAULT | TIMED_OUT | STOPPED | IN_PROGRESS */
@@ -162,6 +166,8 @@ async function call(
     status: body.status ?? 'IN_PROGRESS',
     runPrefix: body.runPrefix,
     logsUrl: body.logsUrl,
+    lines: body.lines ?? [],
+    logToken: body.logToken,
   };
 }
 
@@ -180,12 +186,14 @@ export function startRun(
 export function pollRun(
   config: AppConfig,
   buildId: string,
+  logToken?: string,
   signal?: AbortSignal,
 ): Promise<RunHandle> {
+  const since = logToken ? `&since=${encodeURIComponent(logToken)}` : '';
   return call(config, {
     method: 'GET',
     signal,
-    query: `?build=${encodeURIComponent(buildId)}`,
+    query: `?build=${encodeURIComponent(buildId)}${since}`,
   });
 }
 
@@ -201,16 +209,29 @@ export async function watchRun(
   buildId: string,
   onUpdate: (handle: RunHandle) => void,
   signal: AbortSignal,
-  intervalMs = 5000,
+  intervalMs = 3000,
 ): Promise<RunHandle> {
+  let logToken: string | undefined;
+
   for (;;) {
     await new Promise((done, fail) => {
       const timer = setTimeout(done, intervalMs);
       signal.addEventListener('abort', () => { clearTimeout(timer); fail(signal.reason); }, { once: true });
     });
 
-    const handle = await pollRun(config, buildId, signal);
+    const handle = await pollRun(config, buildId, logToken, signal);
+    logToken = handle.logToken ?? logToken;
     onUpdate(handle);
-    if (isDone(handle.status)) return handle;
+
+    // One last read after the build reports done: the final lines — the
+    // scenario summary and the publish path — usually land in CloudWatch a
+    // beat after CodeBuild flips the status.
+    if (isDone(handle.status)) {
+      try {
+        const last = await pollRun(config, buildId, logToken, signal);
+        if (last.lines?.length) onUpdate(last);
+      } catch { /* the status is what matters; a missed tail is not an error */ }
+      return handle;
+    }
   }
 }

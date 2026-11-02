@@ -57,10 +57,15 @@ phases:
       - rm -rf reports/allure-results && mkdir -p reports/allure-results
       # Gates mirror behave.ini's default_tags plus tag_map.yaml's
       # exclude_always, which is exactly what targeted.yml composes.
+      #
+      # --no-skipped overrides behave.ini's show_skipped=true. Without it the
+      # log prints all ~2300 scenarios the tag did not select, which buries the
+      # handful that ran and makes the streamed log useless to read.
       - |
         set +e
         behave -t "$FLOW_TAGS" \
           -t ~@wip -t ~@skip -t ~@bug -t ~@deprecated -t ~@needs-automation \
+          --no-skipped \
           -f pretty -o - \
           -f allure_behave.formatter:AllureFormatter -o reports/allure-results \
           -D env="$FLOW_ENV" \
@@ -86,6 +91,10 @@ phases:
           --environment "$FLOW_ENV" \
           --trigger "flow:${FLOW_CHUNK}" \
           --actor "qa-dashboard"
+      # --only-show-errors on the sync, not just --no-progress: sync prints a
+      # line per file, and that would bury the scenario summary in the streamed
+      # log. Comments stay out here — CodeBuild echoes block-scalar lines.
+      #
       # One suite folder for every flow run, not one per chunk — 49 folders
       # would bury the real suites in the dashboard's run list. The chunk lives
       # in the summary's `trigger` instead. Read the prefix back out of the file
@@ -93,4 +102,5 @@ phases:
       - |
         export RUN_PREFIX=$(node -e "process.stdout.write(require('$CODEBUILD_SRC_DIR/reports/allure-report/qa-summary.json').prefix)")
         echo "publishing to s3://${DASHBOARD_BUCKET}/${RUN_PREFIX}/"
-        aws s3 sync reports/allure-report "s3://${DASHBOARD_BUCKET}/${RUN_PREFIX}/" --delete --no-progress
+        aws s3 sync reports/allure-report "s3://${DASHBOARD_BUCKET}/${RUN_PREFIX}/" --delete --only-show-errors
+        echo "published $(find reports/allure-report -type f | wc -l | tr -d ' ') files"

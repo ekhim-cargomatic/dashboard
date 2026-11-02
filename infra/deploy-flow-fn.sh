@@ -64,10 +64,15 @@ SRC_KEY="${FLOW_SRC_KEY:-suite.zip}"
 AUTOMATION_DIR="${AUTOMATION_DIR:-$(cd "$ROOT/../playwright-automation" 2>/dev/null && pwd || echo '')}"
 
 MODE=all
+SKIP_IMAGE=false
 case "${1:-}" in
   --code-only)  MODE=code ;;
   --image-only) MODE=image ;;
   --push-tests) MODE=tests ;;
+  # Everything except the image. The Dockerfile changes rarely and the buildspec,
+  # function and IAM change often, so this is the common redeploy — and it does
+  # not need Docker running.
+  --no-image)   SKIP_IMAGE=true ;;
   '')           ;;
   *) echo "error: unknown flag ${1}" >&2; exit 2 ;;
 esac
@@ -75,8 +80,13 @@ esac
 for tool in aws jq zip node; do
   command -v "$tool" >/dev/null || { echo "error: $tool is required but not installed" >&2; exit 1; }
 done
-[[ "$MODE" == code || "$MODE" == tests ]] || command -v docker >/dev/null || {
-  echo "error: docker is required to build the runner image" >&2; exit 1; }
+if [[ "$MODE" == all && "$SKIP_IMAGE" == false ]] || [[ "$MODE" == image ]]; then
+  command -v docker >/dev/null && docker info >/dev/null 2>&1 || {
+    echo "error: the Docker daemon is not reachable, and the runner image needs it." >&2
+    echo "       Start Docker Desktop, or re-run with --no-image if the image is current." >&2
+    exit 1
+  }
+fi
 
 aws sts get-caller-identity >/dev/null || {
   echo "error: AWS credentials are not valid. Run 'aws sso login' (or set keys) first." >&2
@@ -236,7 +246,7 @@ fi
 
 ECR_URI="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${ECR_REPO}"
 
-if [[ "$MODE" == all || "$MODE" == image ]]; then
+if [[ ( "$MODE" == all && "$SKIP_IMAGE" == false ) || "$MODE" == image ]]; then
   aws ecr describe-repositories --repository-names "$ECR_REPO" --region "$REGION" >/dev/null 2>&1 || {
     log "Creating ECR repository $ECR_REPO"
     aws ecr create-repository --repository-name "$ECR_REPO" --region "$REGION" \
@@ -261,6 +271,15 @@ if [[ "$MODE" == all || "$MODE" == image ]]; then
 fi
 
 [[ "$MODE" == image ]] && { echo; echo "Image pushed: ${ECR_URI}:latest"; exit 0; }
+
+if [[ "$SKIP_IMAGE" == true ]]; then
+  aws ecr describe-images --repository-name "$ECR_REPO" --region "$REGION" \
+    --image-ids imageTag=latest >/dev/null 2>&1 || {
+    echo "error: --no-image was passed but ${ECR_URI}:latest does not exist yet." >&2
+    exit 1
+  }
+  log "Reusing the published image (--no-image)"
+fi
 
 # --------------------------------------------------------------------------- #
 # CodeBuild project
@@ -384,11 +403,16 @@ if [[ "$MODE" == all ]]; then
   # Start and read ONE project. The function cannot name another.
   log "Updating $FN_ROLE policy"
   aws iam put-role-policy --role-name "$FN_ROLE" --policy-name start-flow-run \
-    --policy-document "$(jq -n --arg arn "arn:aws:codebuild:${REGION}:${ACCOUNT_ID}:project/${PROJECT}" \
+    --policy-document "$(jq -n \
+      --arg arn "arn:aws:codebuild:${REGION}:${ACCOUNT_ID}:project/${PROJECT}" \
+      --arg logs "arn:aws:logs:${REGION}:${ACCOUNT_ID}:log-group:/aws/codebuild/${PROJECT}:*" \
       '{Version:"2012-10-17", Statement:[
          {Effect:"Allow",
           Action:["codebuild:StartBuild","codebuild:BatchGetBuilds","codebuild:ListBuildsForProject"],
-          Resource:$arn}]}')" >/dev/null
+          Resource:$arn},
+         {Effect:"Allow",
+          Action:["logs:GetLogEvents"],
+          Resource:$logs}]}')" >/dev/null
 fi
 
 FN_ROLE_ARN="$(aws iam get-role --role-name "$FN_ROLE" --query 'Role.Arn' --output text)"
@@ -399,7 +423,8 @@ cp "$HERE/flow-run-fn/index.mjs" "$PKG/"
 # Bundled rather than relied upon: which @aws-sdk clients the Node runtime
 # pre-installs has changed between Lambda Node versions, and discovering that
 # at run time costs a deploy cycle. 2MB is cheaper than the surprise.
-( cd "$PKG" && npm install --silent --no-save --no-package-lock @aws-sdk/client-codebuild >/dev/null 2>&1 )
+( cd "$PKG" && npm install --silent --no-save --no-package-lock \
+    @aws-sdk/client-codebuild @aws-sdk/client-cloudwatch-logs >/dev/null 2>&1 )
 ZIP="$(mktemp -d)/function.zip"
 ( cd "$PKG" && zip -qr "$ZIP" . )
 

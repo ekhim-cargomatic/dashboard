@@ -44,6 +44,21 @@ const PHASE_TEXT: Record<string, string> = {
   COMPLETED: 'finished',
 };
 
+/**
+ * Colour the few lines worth spotting in a wall of behave output: the scenario
+ * headings that say where you are, and the failures that say why you stopped.
+ * Everything else stays plain — highlighting most of a log highlights nothing.
+ */
+function lineClass(line: string): string {
+  if (/^\s*(Feature|Scenario|Scenario Outline):/.test(line)) return 'fg-head';
+  if (/\b(FAILED|AssertionError|Traceback|Error:|error:)/.test(line)) return 'fg-bad';
+  // Only a non-zero count is a failure: behave's summary always prints a
+  // "failed" number, and coluring "0 failed" red says the opposite of the truth.
+  if (/\b[1-9]\d* failed\b/.test(line)) return 'fg-bad';
+  if (/\b\d+ (scenario|step)s? passed\b/.test(line)) return 'fg-good';
+  return '';
+}
+
 export function RunFlowDialog({
   config,
   chunk,
@@ -57,8 +72,23 @@ export function RunFlowDialog({
   const [selector, setSelector] = useState(plan.selector);
   const [env, setEnv] = useState<RunEnv>('staging');
   const [phase, setPhase] = useState<Phase>({ status: 'editing' });
+  const [log, setLog] = useState<string[]>([]);
   const ref = useRef<HTMLDialogElement>(null);
   const abort = useRef<AbortController | null>(null);
+  const logRef = useRef<HTMLPreElement>(null);
+
+  // Follow the tail by default, and stop the moment the reader scrolls up —
+  // yanking the view back down while they are reading an earlier failure is
+  // what makes streamed logs annoying. Intent is tracked rather than inferred
+  // from position: on the first render scrollTop is 0 and the content already
+  // overflows, so a position check reads as "not at the bottom" and the panel
+  // would never follow at all.
+  const follow = useRef(true);
+
+  useEffect(() => {
+    const el = logRef.current;
+    if (el && follow.current) el.scrollTop = el.scrollHeight;
+  }, [log]);
 
   useEffect(() => { const el = ref.current; if (el && !el.open) el.showModal(); }, []);
   useEffect(() => () => abort.current?.abort(), []);
@@ -66,8 +96,15 @@ export function RunFlowDialog({
   const chosen = plan.candidates.find((c) => `@${c.tag}` === selector) ?? plan.coverage;
   const busy = phase.status === 'starting' || phase.status === 'running';
 
+  /** Keep the tail bounded: a long run prints thousands of lines and the DOM
+   *  is the expensive part, not the memory. */
+  const append = (handle: RunHandle) => {
+    if (handle.lines?.length) setLog((prev) => [...prev, ...handle.lines!].slice(-1500));
+  };
+
   async function run() {
     setPhase({ status: 'starting' });
+    setLog([]);
     abort.current = new AbortController();
     const { signal } = abort.current;
 
@@ -78,7 +115,7 @@ export function RunFlowDialog({
       const final = await watchRun(
         config,
         started.buildId,
-        (handle) => setPhase({ status: 'running', handle }),
+        (handle) => { append(handle); setPhase({ status: 'running', handle }); },
         signal,
       );
       setPhase({ status: 'done', handle: final });
@@ -208,6 +245,25 @@ export function RunFlowDialog({
               )}
 
               {phase.status === 'error' && <p className="fm-run-err">{phase.message}</p>}
+
+              {log.length > 0 && (
+                <>
+                  <label className="fm-run-label">Output</label>
+                  <pre
+                    className="fm-run-log"
+                    ref={logRef}
+                    aria-live="polite"
+                    onScroll={(ev) => {
+                      const el = ev.currentTarget;
+                      follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+                    }}
+                  >
+                    {log.map((line, i) => (
+                      <span key={i} className={lineClass(line)}>{line || ' '}{'\n'}</span>
+                    ))}
+                  </pre>
+                </>
+              )}
             </>
           )}
         </div>

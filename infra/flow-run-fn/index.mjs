@@ -47,8 +47,44 @@ import {
   ListBuildsForProjectCommand,
   StartBuildCommand,
 } from '@aws-sdk/client-codebuild';
+import {
+  CloudWatchLogsClient,
+  GetLogEventsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
 
 const client = new CodeBuildClient({});
+const logs = new CloudWatchLogsClient({});
+
+/** Log lines returned per poll. A behave run prints a few hundred; this keeps
+ *  one slow poll from returning a megabyte. */
+const LOG_LIMIT = 600;
+
+/**
+ * Best-effort scrub of anything credential-shaped before it leaves AWS.
+ *
+ * The build log is returned through a public endpoint, and a failing scenario
+ * can print an API response or a request header. This will not catch a secret
+ * that looks like ordinary text, so it is a reduction in exposure rather than a
+ * guarantee — the real control is that the runner only ever touches staging.
+ */
+const SECRETS = [
+  [/((?:password|passwd|pwd|secret|token|api[-_]?key|authorization)["'\s]*[=:]\s*)(\S+)/gi, '$1[redacted]'],
+  [/(Bearer\s+)[A-Za-z0-9._~+/-]{12,}=*/gi, '$1[redacted]'],
+  [/\beyJ[A-Za-z0-9._-]{20,}/g, '[redacted jwt]'],
+];
+
+const redact = (line) => SECRETS.reduce((acc, [re, to]) => acc.replace(re, to), line);
+
+/**
+ * CodeBuild's agent narrates every phase into the same stream. The dialog
+ * already shows the phase, so that chatter just pushes the scenario results out
+ * of view — and it is what lands last, so a finished run would end on
+ * "Assembling file list" instead of "2 scenarios passed". Dropped, except where
+ * it is reporting a failure, which is the one time it says something the phase
+ * label does not.
+ */
+const isAgentNoise = (line) =>
+  /^\[Container\]/.test(line) && !/\b(FAILED|FAULT|TIMED_OUT|ERROR)\b/.test(line);
 
 /** Environments the runner may target. Production is absent on purpose. */
 const ENVS = new Set(['staging', 'dev']);
@@ -179,9 +215,46 @@ async function start(event, origin) {
   return reply(202, describe(build), origin);
 }
 
+/**
+ * The build's own output, tailed forward from wherever the caller left off.
+ *
+ * CloudWatch's nextForwardToken is the cursor: handing back the one we were
+ * given returns only what has arrived since, so a dialog polling every few
+ * seconds reads the log once rather than re-reading it from the top.
+ */
+async function tail(build, token) {
+  const group = build.logs?.groupName;
+  const stream = build.logs?.streamName;
+  if (!group || !stream) return { lines: [], logToken: token };
+
+  try {
+    const page = await logs.send(new GetLogEventsCommand({
+      logGroupName: group,
+      logStreamName: stream,
+      startFromHead: true,
+      limit: LOG_LIMIT,
+      ...(token ? { nextToken: token } : {}),
+    }));
+
+    return {
+      // CodeBuild emits one event per line, usually with the newline still on.
+      lines: (page.events ?? [])
+        .map((e) => redact(String(e.message ?? '').replace(/\s+$/, '')))
+        .filter((line) => !isAgentNoise(line)),
+      logToken: page.nextForwardToken ?? token,
+    };
+  } catch (err) {
+    // A stream that does not exist yet is the normal state for the first few
+    // seconds of a build; it is not worth failing the poll over.
+    if (err?.name === 'ResourceNotFoundException') return { lines: [], logToken: token };
+    throw err;
+  }
+}
+
 async function status(event, origin) {
   const project = process.env.PROJECT_NAME;
   const id = event.queryStringParameters?.build ?? '';
+  const token = event.queryStringParameters?.since || '';
 
   // A build id is `<project>:<uuid>`. Checking the project prefix keeps this
   // from reporting on builds that are none of the dashboard's business.
@@ -192,7 +265,8 @@ async function status(event, origin) {
   const { builds = [] } = await client.send(new BatchGetBuildsCommand({ ids: [id] }));
   if (builds.length === 0) return reply(404, { error: 'No such build.' }, origin);
 
-  return reply(200, describe(builds[0]), origin);
+  const build = builds[0];
+  return reply(200, { ...describe(build), ...(await tail(build, token)) }, origin);
 }
 
 export const handler = async (event) => {
