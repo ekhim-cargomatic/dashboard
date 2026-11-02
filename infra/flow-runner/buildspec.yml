@@ -41,7 +41,11 @@ phases:
       # Not fatal: a run can still work if every role it touches has a password
       # committed in configs/<env>.yaml. It fails loudly later if not, and this
       # line is what makes that failure legible.
-      - test -f .env || echo "warning: no .env in the payload — roles with placeholder passwords will fail"
+      # Block scalar, not a plain one: YAML reads ": " inside a plain scalar as a
+      # mapping indicator no matter what shell quoting is around it, and
+      # CodeBuild rejects the whole buildspec with a YAML_FILE_ERROR.
+      - |
+        test -f .env || echo "warning - no .env in the payload, roles with placeholder passwords will fail"
       - pip install --quiet --no-cache-dir -r requirements.txt
       # A no-op when requirements pins the version the image baked; a real
       # download when it has moved on. Cheaper than being wrong.

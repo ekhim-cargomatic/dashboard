@@ -319,6 +319,21 @@ if [[ "$MODE" == all ]]; then
 
   PROJECT_ROLE_ARN="$(aws iam get-role --role-name "$PROJECT_ROLE" --query 'Role.Arn' --output text)"
 
+  # CodeBuild validates the buildspec only when a build downloads source, so a
+  # YAML slip costs a full provision + run before it surfaces. Catch it here:
+  # a ": " inside a plain scalar silently becomes a mapping, and the command
+  # turns from a string into subkeys.
+  python3 - "$HERE/flow-runner/buildspec.yml" <<'PYEOF' || exit 1
+import sys, yaml
+spec = yaml.safe_load(open(sys.argv[1]))
+bad = [f"{p}.commands[{i}]" for p, b in spec["phases"].items()
+       for i, c in enumerate(b.get("commands", [])) if not isinstance(c, str)]
+if bad:
+    print(f"error: buildspec commands must be strings, these are not: {', '.join(bad)}",
+          file=sys.stderr)
+    sys.exit(1)
+PYEOF
+
   PROJECT_ARGS=(
     --name "$PROJECT"
     --region "$REGION"
