@@ -165,4 +165,20 @@ export interface AppConfig {
    * drive-by POSTs, it is not authentication. See infra/deploy-notion-fn.sh.
    */
   notionFnToken: string;
+  /**
+   * HTTP API path that starts a flow-chunk test run — `/api/run-flow`.
+   *
+   * The browser has no AWS credentials, so starting a build goes through
+   * infra/flow-run-fn, which holds them and can only start one hardcoded
+   * CodeBuild project from a fixed tag allowlist. Empty hides the play button
+   * entirely — the map stays useful without it.
+   */
+  runFlowUrl: string;
+  /**
+   * Sent as `x-dashboard-token` to the function above. Like `notionFnToken`
+   * this ships in config.json and is therefore public: it deters drive-by
+   * POSTs, it is not authentication. The real containment is that the function
+   * can only run tagged tests against staging, one build at a time.
+   */
+  runFlowToken: string;
 }

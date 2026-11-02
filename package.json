@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "QA automation dashboard — Allure results from S3, hosted on S3 + CloudFront",
+  "description": "QA automation dashboard \u2014 Allure results from S3, hosted on S3 + CloudFront",
   "engines": {
     "node": ">=20"
   },
@@ -16,7 +16,8 @@
     "summary": "node ci/qa-summary.mjs",
     "fixtures": "node scripts/make-fixtures.mjs",
     "notion:local": "node infra/notion-agent-task/local-server.mjs",
-    "deploy": "bash infra/deploy.sh"
+    "deploy": "bash infra/deploy.sh",
+    "gen:flow-tags": "node scripts/gen-flow-tags.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

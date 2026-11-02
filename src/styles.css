@@ -1546,6 +1546,39 @@ button.btn.shot:hover {
 .fm-dialog::backdrop { background: rgb(0 0 0 / 0.45); backdrop-filter: blur(2px); }
 .fm-dialog-about { width: min(720px, 94vw); height: auto; max-height: 80vh; }
 
+/*
+   A chunk opens as a drawer off the right edge rather than a box in the middle.
+   Centred, it covered the node you had just clicked; against the edge the map
+   keeps the left two thirds of the window, so the thing you are reading about
+   is still on screen beside what you are reading.
+
+   It stays a modal <dialog>. show() does not put an element in the top layer,
+   so a non-modal drawer would vanish behind the canvas in native full screen —
+   and modal is what gives us Escape, focus trapping and focus return for free.
+   The backdrop is lighter than the centred dialog's for the same reason the
+   drawer is at the edge: the map behind it is meant to stay legible.
+*/
+.fm-drawer {
+  margin: 0 0 0 auto;
+  width: min(620px, 96vw);
+  height: 100dvh; max-height: 100dvh;
+  animation: fm-drawer-in 180ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.fm-drawer::backdrop {
+  background: rgb(0 0 0 / 0.3); backdrop-filter: none;
+  animation: fm-drawer-scrim 180ms ease;
+}
+.fm-drawer .fm-dialog-panel {
+  max-height: none; border-radius: 0;
+  border-top: none; border-right: none; border-bottom: none;
+  box-shadow: -18px 0 48px rgb(0 0 0 / 0.38);
+}
+@keyframes fm-drawer-in { from { transform: translateX(24px); opacity: 0; } }
+@keyframes fm-drawer-scrim { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .fm-drawer, .fm-drawer::backdrop { animation: none; }
+}
+
 .fm-dialog-panel {
   display: flex; flex-direction: column; height: 100%; max-height: 90vh;
   border: 1px solid var(--border); border-radius: var(--radius);
@@ -1575,3 +1608,79 @@ button.btn.shot:hover {
   padding: 6px 12px; font-size: 12.5px; cursor: pointer; font-family: inherit;
 }
 .fm-about-btn:hover { background: var(--ghost); color: var(--text-primary); }
+
+/* ── running a chunk's tests ────────────────────────────────────────────── */
+/*
+   The play button sits in the drawer's action row beside "copy". It names the
+   tag it would run, because "run" alone would imply the map's steps are what
+   executes — and they are not. A chunk with no tests keeps the button, greyed,
+   rather than hiding it: the absence is information.
+*/
+.fm-run-play {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-1); color: var(--text-secondary);
+  font-family: inherit; font-size: 12px; line-height: 1;
+  padding: 5px 9px; cursor: pointer; white-space: nowrap;
+}
+.fm-run-play:hover { background: var(--ghost); color: var(--text-primary); border-color: var(--axis); }
+.fm-run-play.is-empty { color: var(--text-muted); cursor: help; }
+.fm-run-play.is-empty:hover { background: var(--surface-1); color: var(--text-muted); }
+
+/* Centred, unlike the chunk drawer — it is a decision, not a document. */
+.fm-dialog-run { width: min(520px, 94vw); height: auto; max-height: 86vh; }
+/* The shared panel is sized for the drawer, which fills its dialog. This one is
+   as tall as what it has to say, so the footer sits under the content rather
+   than at the bottom of an empty box. */
+.fm-dialog-run .fm-dialog-panel { height: auto; max-height: 86vh; }
+
+.fm-run { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.fm-run p { margin: 0; font-size: 13px; }
+.fm-run .muted { font-size: 12px; color: var(--text-muted); }
+.fm-run code { font-size: 12px; }
+
+.fm-run-what {
+  padding: 9px 11px; border-radius: var(--radius-sm);
+  background: var(--ghost); color: var(--text-secondary);
+}
+.fm-run-none { color: var(--text-primary); }
+
+.fm-run-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-muted); margin-top: 4px;
+}
+.fm-run-select {
+  font-family: inherit; font-size: 13px; padding: 7px 9px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-1); color: var(--text-primary);
+}
+.fm-run-select:disabled { opacity: 0.6; }
+.fm-run-single { font-size: 13px; }
+
+.fm-run-ok   { color: var(--success-text); }
+.fm-run-warn { color: var(--status-serious); }
+.fm-run-err  { color: var(--status-critical); }
+
+.fm-run-status { display: flex; align-items: center; gap: 7px; color: var(--text-secondary); }
+.fm-run-spin {
+  width: 11px; height: 11px; flex: none; border-radius: 50%;
+  border: 2px solid var(--axis); border-top-color: var(--accent);
+  animation: fm-run-spin 700ms linear infinite;
+}
+@keyframes fm-run-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .fm-run-spin { animation-duration: 2.4s; }
+}
+
+.fm-run-foot {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface-1);
+}
+.fm-run-btn {
+  font-family: inherit; font-size: 13px; padding: 7px 14px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-1); color: var(--text-secondary);
+}
+.fm-run-btn:hover:not(:disabled) { background: var(--ghost); color: var(--text-primary); }
+.fm-run-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.fm-run-btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+.fm-run-btn:disabled { opacity: 0.55; cursor: default; }

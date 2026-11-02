@@ -47,9 +47,10 @@ screen** in its toolbar hands it the whole display. Drag the background to pan,
 control; `+`, `−`, `0` and `f` do the same from the keyboard. **fit** shows all 49
 chunks at once, which is too small to read and the right way to see the shape.
 
-Clicking a chunk opens its detail over the map rather than below it: what gates
-it, what it needs, what needs it, and every step with its selector and API calls.
-Following a dependency link from inside swaps the dialog to that chunk and moves
+Clicking a chunk opens its detail as a drawer off the right edge rather than a
+panel below it, so the map stays on screen beside what you are reading: what
+gates the chunk, what it needs, what needs it, and every step with its selector
+and API calls. Following a dependency link from inside swaps the drawer to that chunk and moves
 the map behind it, so closing leaves you where that chain ended. Escape or the
 backdrop closes it, and the pan and zoom are untouched. **about** carries the
 flow variables and the not-yet-mapped list.
@@ -57,6 +58,89 @@ flow variables and the not-yet-mapped list.
 The flag hides UI, not data. `public/qa-flow/` is served to anyone who asks for it.
 Nothing in there is sensitive — selectors and endpoint shapes, no credentials — but
 do not put a fixture password in it on the assumption the flag protects it.
+
+## Running a chunk's tests
+
+The drawer's **▶ run** button starts the automation for that chunk and watches
+it. What it runs deserves to be stated plainly, because the button could easily
+imply something it does not do:
+
+> It runs the **existing tests tagged for that area**. It does not execute the
+> chunk's steps. A chunk's `tags` and a feature file's tags are the same
+> vocabulary, and that is the only bridge between this map and the suite.
+
+So the button names the tag — `▶ run @markets`, not `▶ run` — and the dialog
+says how many scenarios that is before anything starts. Measured against the
+current suite, the 49 chunks fall into three groups:
+
+| | chunks | what the button does |
+|---|---|---|
+| a narrow area tag exists | 36 | runs it, and says how many scenarios |
+| only a broad one exists | 4 | runs it, warning that `@drayage` is 195 scenarios, not one chunk |
+| no area tag the suite carries | 9 | greyed, and names the tag nobody has written a test for |
+
+That last group is the useful one: `@carrierPortal`, `@shipperPortal`,
+`@pendingTasks`, `@pricing` and `@auth` are in the map and in no feature file.
+The button is left visible and disabled rather than hidden, because the absence
+is the finding.
+
+Scope and layer tags are deliberately not selectors. `@smoke` says *when* a test
+runs and `@ui` says *how it is written*; neither names a chunk, so a chunk left
+with only those counts as "no area tag" however few scenarios they would match.
+
+### What happens when you press it
+
+```
+                                     s3://…-qa-flow-src/suite.zip  (private)
+                                            │  uploaded by --push-tests
+                                            ▼
+drawer ──POST /api/run-flow──> Lambda ──StartBuild──> CodeBuild
+                                                        behave · allure
+                                                        aws s3 sync -> runs/flow-run/
+drawer <──GET /api/run-flow?build=…── phase, then the run appears in the runs list
+```
+
+The suite is uploaded from a workstation rather than cloned, so no git
+credential exists anywhere in this system. `./infra/deploy-flow-fn.sh
+--push-tests` re-uploads it in a few seconds after you edit a test. The suite's
+`.env` travels inside that private payload, which is what `before_all` already
+reads — so no credential is stored anywhere else, and none is ever sent from the
+browser.
+
+The run publishes into the same `runs/` prefix as every CI run, with the same
+`qa-summary.json`, so it shows up in the dashboard like any other — no special
+case on the reading side. All flow runs share one `flow-run` suite folder rather
+than one per chunk, which would bury the real suites; the chunk id is recorded
+in the summary's `trigger`.
+
+**One build at a time.** That caps spend, but mostly it stops two runs fighting
+over the same staging records — a failure mode that looks exactly like a product
+bug and wastes an afternoon.
+
+**The endpoint is public and unauthenticated**, like the rest of the dashboard.
+It is kept harmless by being unable to do much: a hardcoded CodeBuild project, a
+tag allowlist baked in from this map, `staging`/`dev` only, and the one-at-a-time
+rule. It cannot run an arbitrary behave expression. See the header of
+`infra/flow-run-fn/index.mjs`.
+
+### Working on it without spending anything
+
+`infra/flow-run-fn/local-server.mjs` runs the real handler against a simulated
+CodeBuild, so the dialog's polling, phase labels and failure states can be
+developed without starting a build:
+
+```
+npm i --no-save @aws-sdk/client-codebuild
+node infra/flow-run-fn/local-server.mjs          # --fail to see a red run
+```
+
+then point `public/config.json` (gitignored) at
+`"runFlowUrl": "http://localhost:8788/api/run-flow"`.
+
+The tag counts come from `npm run gen:flow-tags`, which reads the feature files
+and writes `src/lib/flow-tags.generated.ts`. **Re-run it when features are added
+or retagged** — otherwise the dialog promises a scenario count the suite no
+longer has.
 
 ## Why each piece is shaped the way it is
 

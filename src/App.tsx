@@ -216,7 +216,7 @@ export default function App() {
           </div>
         </header>
         <section className="block">
-          <FlowMap />
+          <FlowMap config={config} />
         </section>
       </div>
     );

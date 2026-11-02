@@ -10,6 +10,7 @@ import {
   type FlowIndex,
   type FlowNode,
 } from '../lib/flow';
+import type { AppConfig } from '../types';
 
 /**
  * The app as a graph, behind ?qa=1.
@@ -22,9 +23,10 @@ import {
  * the write) lives on the node rather than in prose next to it.
  *
  * The map is the page: it takes whatever height the window has left, and the
- * detail opens over it. Side by side, neither fitted — the tree is several
- * screens wide and a chunk's steps run to a few hundred lines — so the two were
- * permanently fighting for the same pixels.
+ * detail opens as a drawer down its right edge. As equal panes neither fitted —
+ * the tree is several screens wide and a chunk's steps run to a few hundred
+ * lines — so the two were permanently fighting for the same pixels. The drawer
+ * takes only the width the steps need, and only while you are reading one.
  */
 
 /**
@@ -94,7 +96,7 @@ function AboutDialog({ flow, index, onClose }: {
   );
 }
 
-export function FlowMap() {
+export function FlowMap({ config }: { config: AppConfig | null }) {
   const [index, setIndex] = useState<FlowIndex | null>(null);
   const [flow, setFlow] = useState<Flow | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -229,6 +231,7 @@ Re-check selectors against the Playwright page objects with
 
       {chunk && (
         <ChunkDialog
+          config={config}
           flow={flow}
           chunk={chunk}
           onlyGaps={onlyGaps}

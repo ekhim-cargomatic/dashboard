@@ -21,6 +21,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   ciRunUrlTemplate: '',
   notionFnUrl: '',
   notionFnToken: '',
+  runFlowUrl: '',
+  runFlowToken: '',
 };
 
 export async function loadConfig(): Promise<AppConfig> {
@@ -39,6 +41,8 @@ export async function loadConfig(): Promise<AppConfig> {
       ciRunUrlTemplate: raw.ciRunUrlTemplate ?? DEFAULT_CONFIG.ciRunUrlTemplate,
       notionFnUrl: raw.notionFnUrl ?? DEFAULT_CONFIG.notionFnUrl,
       notionFnToken: raw.notionFnToken ?? DEFAULT_CONFIG.notionFnToken,
+      runFlowUrl: raw.runFlowUrl ?? DEFAULT_CONFIG.runFlowUrl,
+      runFlowToken: raw.runFlowToken ?? DEFAULT_CONFIG.runFlowToken,
     };
   } catch {
     // No config.json deployed — same-origin defaults are the right guess.

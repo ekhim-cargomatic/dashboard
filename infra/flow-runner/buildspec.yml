@@ -1,0 +1,92 @@
+version: 0.2
+
+# Run one flow chunk's tests and publish the report where the dashboard reads it.
+#
+# The suite arrives as a zip in a private bucket, uploaded from a workstation by
+# `deploy-flow-fn.sh --push-tests`. CodeBuild extracts it into $CODEBUILD_SRC_DIR
+# before this runs, so there is no clone and no git credential anywhere in the
+# system. Updating tests means re-uploading 2.7MB, not rebuilding an image.
+#
+# Driven by environment variables the Lambda sets per build — the project itself
+# holds no tag or chunk, so a new chunk needs no AWS change.
+#
+#   FLOW_TAGS    behave selector, e.g. "@orderBooking"   (validated by the Lambda)
+#   FLOW_ENV     staging | dev                            (never prod)
+#   FLOW_CHUNK   the chunk id, recorded in the summary so a run is traceable
+#   DASHBOARD_BUCKET  where the report goes
+#
+# Credentials come from the .env inside that payload, which is what the suite
+# already reads via load_dotenv() in before_all. Nothing is passed in from the
+# caller, so the public endpoint cannot influence who the tests log in as.
+#
+# Test failures do NOT fail the build. The build answers "did the run complete",
+# and qa-summary.json answers "did the tests pass" — conflating them would mean a
+# red build whenever a test legitimately caught a regression, and would make the
+# UI unable to tell a broken runner from a broken product.
+
+env:
+  # Returned by BatchGetBuilds, which is how the Lambda tells the dashboard
+  # exactly which run to load instead of making it guess from the listing.
+  exported-variables:
+    - RUN_PREFIX
+  variables:
+    FLOW_ENV: staging
+
+phases:
+  pre_build:
+    commands:
+      - echo "Chunk $FLOW_CHUNK · selector $FLOW_TAGS · env $FLOW_ENV"
+      - cd "$CODEBUILD_SRC_DIR"
+      - test -f requirements.txt || { echo "payload is not a playwright-automation tree"; exit 1; }
+      # Not fatal: a run can still work if every role it touches has a password
+      # committed in configs/<env>.yaml. It fails loudly later if not, and this
+      # line is what makes that failure legible.
+      - test -f .env || echo "warning: no .env in the payload — roles with placeholder passwords will fail"
+      - pip install --quiet --no-cache-dir -r requirements.txt
+      # A no-op when requirements pins the version the image baked; a real
+      # download when it has moved on. Cheaper than being wrong.
+      - playwright install chromium
+
+  build:
+    commands:
+      - cd "$CODEBUILD_SRC_DIR"
+      - rm -rf reports/allure-results && mkdir -p reports/allure-results
+      # Gates mirror behave.ini's default_tags plus tag_map.yaml's
+      # exclude_always, which is exactly what targeted.yml composes.
+      - |
+        set +e
+        behave -t "$FLOW_TAGS" \
+          -t ~@wip -t ~@skip -t ~@bug -t ~@deprecated -t ~@needs-automation \
+          -f pretty -o - \
+          -f allure_behave.formatter:AllureFormatter -o reports/allure-results \
+          -D env="$FLOW_ENV" \
+          -D browser=chromium \
+          -D headless=true \
+          -D screenshot_dir=reports/screenshots
+        echo "behave exited $?"
+        set -e
+
+  post_build:
+    commands:
+      - cd "$CODEBUILD_SRC_DIR"
+      # Runs even when the build phase failed, which is the point: a crashed run
+      # still has partial results worth looking at.
+      - allure generate reports/allure-results -o reports/allure-report --clean
+      - |
+        node /opt/qa/qa-summary.mjs \
+          --results reports/allure-results \
+          --out reports/allure-report/qa-summary.json \
+          --domain-map /opt/qa/domains.generated.json \
+          --workflow "Flow run" \
+          --run-number "$CODEBUILD_BUILD_NUMBER" \
+          --environment "$FLOW_ENV" \
+          --trigger "flow:${FLOW_CHUNK}" \
+          --actor "qa-dashboard"
+      # One suite folder for every flow run, not one per chunk — 49 folders
+      # would bury the real suites in the dashboard's run list. The chunk lives
+      # in the summary's `trigger` instead. Read the prefix back out of the file
+      # rather than recomputing it: the key embeds a timestamp that would drift.
+      - |
+        export RUN_PREFIX=$(node -e "process.stdout.write(require('$CODEBUILD_SRC_DIR/reports/allure-report/qa-summary.json').prefix)")
+        echo "publishing to s3://${DASHBOARD_BUCKET}/${RUN_PREFIX}/"
+        aws s3 sync reports/allure-report "s3://${DASHBOARD_BUCKET}/${RUN_PREFIX}/" --delete --no-progress

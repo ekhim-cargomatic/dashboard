@@ -346,8 +346,11 @@ jq -n \
   --argjson maxRuns "$MAX_RUNS_PER_WORKFLOW" \
   --arg notionFnUrl "${NOTION_FN_URL:-}" \
   --arg notionFnToken "${DASHBOARD_TOKEN:-}" \
+  --arg runFlowUrl "${RUN_FLOW_URL:-}" \
+  --arg runFlowToken "${DASHBOARD_TOKEN:-}" \
   '{dataBaseUrl: "", reportBaseUrl: "", runsPrefix: $prefix, maxRunsPerWorkflow: $maxRuns,
-    notionFnUrl: $notionFnUrl, notionFnToken: $notionFnToken}' \
+    notionFnUrl: $notionFnUrl, notionFnToken: $notionFnToken,
+    runFlowUrl: $runFlowUrl, runFlowToken: $runFlowToken}' \
   > "$ROOT/dist/config.json"
 
 log "Uploading to s3://$BUCKET"
