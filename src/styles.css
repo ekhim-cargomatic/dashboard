@@ -1741,6 +1741,11 @@ button.btn.shot:hover {
   background: var(--surface-1);
   max-height: 260px; overflow: auto;
   display: flex; flex-direction: column; gap: 3px;
+  /* The dialog body is itself a column flex container, and this is the only
+     child above the log that scrolls — so its automatic minimum size is zero
+     and it would absorb the whole dialog's overflow, collapsing to a sliver of
+     one clipped row. Hold its height and let the body scroll instead. */
+  flex: none;
 }
 .fm-run-steps li {
   display: flex; align-items: baseline; gap: 7px;
