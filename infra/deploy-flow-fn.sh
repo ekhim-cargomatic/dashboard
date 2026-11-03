@@ -543,12 +543,16 @@ infra/deploy.env should contain the same-origin path:
 
   ./infra/deploy.sh --app-only
 
-Smoke-test the runner on its own before wiring the UI — @markets is the
-smallest real tag in the suite:
+Smoke-test it end to end. auth.nav is the smallest real plan — five steps that
+sign in and check the nav rendered, and no write beyond the login itself:
 
-  aws codebuild start-build --region $REGION --project-name $PROJECT \\
-    --environment-variables-override \\
-      name=FLOW_PLAN_BUCKET,value=$SRC_BUCKET name=FLOW_PLAN_KEY,value=plans/<key>.json
+  curl -s -X POST -H 'content-type: application/json' \\
+    -d '{"target":"auth.nav","env":"staging"}' \\
+    ${ALLOWED_ORIGIN:-<origin>}/api/run-flow
   aws s3 ls s3://${BUCKET}/runs/flow-run/
+
+The function resolves the plan itself, so a build cannot be started by hand
+without one — pass FLOW_PLAN_BUCKET and FLOW_PLAN_KEY if you need to replay a
+plan the function already wrote.
 
 EOF

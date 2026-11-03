@@ -48,12 +48,7 @@ phases:
       # Not fatal on its own: roles whose password is a literal in configs still
       # work. It fails loudly later if a placeholder has no value, and this line
       # is what makes that failure legible.
-      #
-      # Block scalar, not a plain one: YAML reads ": " inside a plain scalar as
-      # a mapping indicator no matter what shell quoting is around it, and
-      # CodeBuild rejects the whole buildspec with a YAML_FILE_ERROR.
-      - |
-        test -f .env || echo "warning - no .env in the payload, roles with placeholder passwords will fail"
+      - test -f .env || echo "warning - no .env in the payload, roles with placeholder passwords will fail"
       # The plan and the runner both travel outside the image, so changing
       # either takes effect on the next deploy rather than on an image rebuild.
       - aws s3 cp "s3://${FLOW_PLAN_BUCKET}/${FLOW_PLAN_KEY}" plan.json --only-show-errors
@@ -67,16 +62,14 @@ phases:
     commands:
       - cd "$CODEBUILD_SRC_DIR"
       - rm -rf reports/allure-results && mkdir -p reports/allure-results
-      - |
-        set +e
-        python run_plan.py \
-          --plan plan.json \
-          --repo . \
-          --env "$FLOW_ENV" \
-          --results reports/allure-results \
-          --screenshots reports/screenshots
-        echo "runner exited $?"
-        set -e
+      # One line, not a block. CodeBuild echoes a command before running it: a
+      # single-line one goes out on the agent's own "[Container] Running
+      # command" line, which the function already filters, while every line of
+      # a block scalar lands in the log as output and ends up in the dialog.
+      #
+      # No `set +e` guard either — run_plan.py exits 0 whatever the browser
+      # finds, because a failing step is a result and not a broken build.
+      - python run_plan.py --plan plan.json --repo . --env "$FLOW_ENV" --results reports/allure-results --screenshots reports/screenshots
 
   post_build:
     commands:
@@ -84,26 +77,14 @@ phases:
       # Runs even when the build phase failed, which is the point: a run that
       # stopped partway still has a result worth looking at.
       - allure generate reports/allure-results -o reports/allure-report --clean
-      - |
-        node /opt/qa/qa-summary.mjs \
-          --results reports/allure-results \
-          --out reports/allure-report/qa-summary.json \
-          --domain-map /opt/qa/domains.generated.json \
-          --workflow "Flow run" \
-          --run-number "$CODEBUILD_BUILD_NUMBER" \
-          --environment "$FLOW_ENV" \
-          --trigger "flow:${FLOW_TARGET}" \
-          --actor "qa-dashboard"
-      # --only-show-errors on the sync, not just --no-progress: sync prints a
-      # line per file, and that would bury the step results in the streamed log.
-      # Comments stay out of the block below — CodeBuild echoes those lines.
-      #
-      # One suite folder for every flow run, not one per target. The target
-      # lives in the summary's `trigger` instead. Read the prefix back out of
-      # the file rather than recomputing it: the key embeds a timestamp that
-      # would drift.
-      - |
-        export RUN_PREFIX=$(node -e "process.stdout.write(require('$CODEBUILD_SRC_DIR/reports/allure-report/qa-summary.json').prefix)")
-        echo "publishing to s3://${DASHBOARD_BUCKET}/${RUN_PREFIX}/"
-        aws s3 sync reports/allure-report "s3://${DASHBOARD_BUCKET}/${RUN_PREFIX}/" --delete --only-show-errors
-        echo "published $(find reports/allure-report -type f | wc -l | tr -d ' ') files"
+      - node /opt/qa/qa-summary.mjs --results reports/allure-results --out reports/allure-report/qa-summary.json --domain-map /opt/qa/domains.generated.json --workflow "Flow run" --run-number "$CODEBUILD_BUILD_NUMBER" --environment "$FLOW_ENV" --trigger "flow:${FLOW_TARGET}" --actor "qa-dashboard"
+      # Read the prefix back out of the file rather than recomputing it: the key
+      # embeds a timestamp that would drift. One suite folder for every flow
+      # run, not one per target, which would bury the real suites — the target
+      # lives in the summary's `trigger` instead.
+      - export RUN_PREFIX=$(node -e "process.stdout.write(require('$CODEBUILD_SRC_DIR/reports/allure-report/qa-summary.json').prefix)")
+      - echo "publishing to s3://${DASHBOARD_BUCKET}/${RUN_PREFIX}/"
+      # --only-show-errors, not just --no-progress: sync prints a line per file,
+      # and 40 upload lines would bury the step results in the streamed log.
+      - aws s3 sync reports/allure-report "s3://${DASHBOARD_BUCKET}/${RUN_PREFIX}/" --delete --only-show-errors
+      - echo "published $(find reports/allure-report -type f | wc -l | tr -d ' ') files"
