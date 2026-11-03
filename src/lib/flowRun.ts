@@ -1,129 +1,98 @@
 /**
- * Running a flow chunk's automation.
+ * Running a point on the flow map, from the browser.
  *
- * The request does NOT start anything in the browser. It goes to a Lambda that
- * holds the AWS credentials and starts a CodeBuild project, which clones
- * playwright-automation, runs behave, and syncs the Allure report back into the
- * same `runs/` prefix this dashboard already reads. See infra/flow-run-fn.
+ * The dashboard holds no credentials and composes no plan. It names a node and
+ * asks the function what that would do; the function resolves the plan from its
+ * own copy of the map and answers with the steps. Pressing run sends the same
+ * node id back, and the function resolves it again rather than trusting what it
+ * handed out — so nothing the page could be tricked into sending can change
+ * which selectors a signed-in staging browser is driven through.
  *
- * `config.runFlowUrl` being empty is the normal state for a dashboard that has
- * not provisioned the runner: `canRunFlow()` is false and the UI hides the
- * button rather than offering something that would fail.
- *
- * ── What a run actually covers ──────────────────────────────────────────────
- *
- * A chunk's `tags` and a feature file's tags are the same vocabulary, and that
- * is the ONLY bridge between the map and the suite. So pressing play runs the
- * existing tests tagged for this area — it does not execute the chunk's steps.
- * Nothing here pretends otherwise: `resolve()` reports which of three states a
- * chunk is in, and the UI is expected to show it before anything starts.
+ * It follows that the preview and the run cannot disagree. That is worth more
+ * than the round trip costs: a preview resolved here, against the map the page
+ * happens to have loaded, would drift from the runner the first time either
+ * side changed.
  */
 
-import { SCOPE_TAGS, LAYER_TAGS } from './domains.generated';
-import { BROAD_RUNS, FEATURE_TAGS, type TagCoverage } from './flow-tags.generated';
-import type { FlowChunk } from './flow';
 import type { AppConfig } from '../types';
 
-/** Environments the runner accepts. Production is deliberately not one of them. */
 export const RUN_ENVS = ['staging', 'dev'] as const;
 export type RunEnv = (typeof RUN_ENVS)[number];
 
+/** Hidden rather than broken when the runner was never deployed. */
 export const canRunFlow = (config: AppConfig): boolean => Boolean(config.runFlowUrl);
 
-/**
- * Tags that say *when* a test runs or *how* it is written rather than what
- * business area it covers. `@smoke` matches 20 scenarios drawn from all over
- * the suite and `@ui` matches 1107 — neither one names a chunk, so neither can
- * stand in for one however few scenarios it happens to select.
- *
- * `@auth.<role>` is excluded for the same reason: it says who logs in.
- */
-const GENERIC = new Set([...SCOPE_TAGS, ...LAYER_TAGS]);
-
-const isAreaTag = (tag: string): boolean => {
-  const bare = tag.replace(/^@/, '');
-  return !GENERIC.has(bare.toLowerCase()) && !bare.startsWith('auth.');
-};
-
-export type RunFitness =
-  /** One area tag names this chunk and selects a sane number of scenarios. */
-  | 'runnable'
-  /** An area tag matched, but it covers most of the suite. Runnable, with a warning. */
-  | 'broad'
-  /** Every area tag on this chunk is absent from the suite. Nothing to run. */
-  | 'none';
-
-export interface RunPlan {
-  fitness: RunFitness;
-  /** The behave selector, with the casing the feature files use. Empty when `none`. */
-  selector: string;
-  coverage: TagCoverage | null;
-  /**
-   * Every area tag on the chunk that the suite actually carries, narrowest
-   * first. More than one means there is a real choice to offer rather than a
-   * guess to make on the user's behalf.
-   */
-  candidates: TagCoverage[];
-  /** Area tags on the chunk that exist in no feature file — the honest gap. */
-  missing: string[];
-  /** One line naming what will happen, for the button title and the dialog. */
-  summary: string;
+/** One gesture in a plan, as the function resolved it. */
+export interface PlanStep {
+  verb: string;
+  name: string;
+  node: string;
+  chunk: string;
+  /** Why this step is in the plan, in words — "the form requires it". */
+  why: string;
+  path?: string;
+  value?: string;
+  /** A credential, resolved on the runner. Shown, never sent, never editable. */
+  secret?: boolean;
+  await?: { method: string; path: string };
+  destructive?: boolean;
 }
 
-/**
- * What pressing play on this chunk would run.
- *
- * Picks the *narrowest area tag that actually exists in the suite*. Narrowest
- * because a chunk is one screen and the tag closest to it is the most useful
- * run; OR-ing a chunk's three tags would collect hundreds of scenarios, and
- * AND-ing them would usually collect none — the map's tag sets describe the
- * chunk, not any single scenario.
- */
-export function resolve(chunk: FlowChunk): RunPlan {
-  const area = (chunk.tags ?? []).filter(isAreaTag);
-  const missing: string[] = [];
-  const hits: TagCoverage[] = [];
-
-  for (const tag of area) {
-    const found = FEATURE_TAGS[tag.replace(/^@/, '').toLowerCase()];
-    if (found) hits.push(found);
-    else missing.push(tag);
-  }
-
-  if (hits.length === 0) {
-    const absent = missing.length > 0;
-    return {
-      fitness: 'none',
-      selector: '',
-      coverage: null,
-      candidates: [],
-      missing,
-      summary: absent
-        ? `No tests carry ${missing.join(' or ')}. Nothing to run for this chunk yet.`
-        : 'This chunk has no area tag, only scope or layer tags — nothing identifies its tests.',
-    };
-  }
-
-  const candidates = [...hits].sort((a, b) => a.runs - b.runs);
-  const best = candidates[0];
-  const selector = `@${best.tag}`;
-  const broad = best.runs > BROAD_RUNS;
-
-  return {
-    fitness: broad ? 'broad' : 'runnable',
-    selector,
-    coverage: best,
-    candidates,
-    missing,
-    summary: broad
-      ? `${selector} is the narrowest tag this chunk has, but it covers ${best.runs} scenarios `
-        + `across ${best.files} feature files — far more than this one chunk.`
-      : `${best.runs} scenario${best.runs === 1 ? '' : 's'} tagged ${selector}`
-        + `, across ${best.files} feature file${best.files === 1 ? '' : 's'}.`,
-  };
+/** A field in the plan whose value can be changed before running. */
+export interface PlanField {
+  node: string;
+  name: string;
+  control?: string;
+  value: string;
+  chunk: string;
 }
 
-/** A build in flight, or the record of one that finished. */
+/** Something that stops a point on the map being runnable at all. */
+export interface PlanBlocker {
+  node: string;
+  name: string;
+  why: string;
+}
+
+export interface FlowPlan {
+  target: string;
+  targetName: string;
+  chunk: string;
+  chunkName: string;
+  /** The chunks crossed to get here, in order — usually starting with a sign-in. */
+  chunks: string[];
+  portal: string;
+  runnable: boolean;
+  blockers: PlanBlocker[];
+  fields: PlanField[];
+  steps: PlanStep[];
+}
+
+async function get<T>(config: AppConfig, query: string, signal?: AbortSignal): Promise<T> {
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (config.runFlowToken) headers['x-dashboard-token'] = config.runFlowToken;
+
+  let response: Response;
+  try {
+    response = await fetch(`${config.runFlowUrl}${query}`, { method: 'GET', headers, signal });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') throw err;
+    throw new Error('Could not reach the run function. Check the network, or that it is deployed.');
+  }
+  const body = (await response.json().catch(() => ({}))) as T & { error?: string };
+  if (!response.ok) throw new Error(body.error || `Request failed (HTTP ${response.status})`);
+  return body;
+}
+
+/** What pressing run on this node would do, before anything happens. */
+export function fetchPlan(
+  config: AppConfig,
+  target: string,
+  signal?: AbortSignal,
+): Promise<FlowPlan> {
+  return get<FlowPlan>(config, `?plan=${encodeURIComponent(target)}`, signal);
+}
+
 export interface RunHandle {
   buildId: string;
   /** New log lines since the last poll — not the whole log. */
@@ -173,7 +142,7 @@ async function call(
 
 export function startRun(
   config: AppConfig,
-  args: { chunkId: string; selector: string; env: RunEnv },
+  args: { target: string; env: RunEnv; values?: Record<string, string> },
   signal?: AbortSignal,
 ): Promise<RunHandle> {
   return call(config, {
@@ -200,9 +169,9 @@ export function pollRun(
 /**
  * Poll until the build finishes, reporting each change.
  *
- * Every 5s: a behave run is minutes long, so anything tighter is just load on
- * the function, and anything looser makes the dialog feel stuck. Resolves with
- * the final handle; rejects only if the caller aborts.
+ * Every 3s: a plan is tens of steps and each one prints as it happens, so a
+ * looser interval makes the dialog feel stuck on a run that is moving. Resolves
+ * with the final handle; rejects only if the caller aborts.
  */
 export async function watchRun(
   config: AppConfig,

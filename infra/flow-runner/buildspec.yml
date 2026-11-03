@@ -1,28 +1,34 @@
 version: 0.2
 
-# Run one flow chunk's tests and publish the report where the dashboard reads it.
+# Walk one point of the flow map in a browser, and publish the result where the
+# dashboard reads it.
 #
 # The suite arrives as a zip in a private bucket, uploaded from a workstation by
 # `deploy-flow-fn.sh --push-tests`. CodeBuild extracts it into $CODEBUILD_SRC_DIR
 # before this runs, so there is no clone and no git credential anywhere in the
-# system. Updating tests means re-uploading 2.7MB, not rebuilding an image.
+# system.
 #
-# Driven by environment variables the Lambda sets per build — the project itself
-# holds no tag or chunk, so a new chunk needs no AWS change.
+# This does not run behave and reads no feature files. The plan — which page,
+# which selector, which gesture, in which order — was resolved by the Lambda
+# from the flow map and left in S3; run_plan.py performs it. The map is the
+# script, which is the whole point: pressing play on a step runs that step, not
+# whatever tests happen to share a tag with it.
 #
-#   FLOW_TAGS    behave selector, e.g. "@orderBooking"   (validated by the Lambda)
+#   FLOW_PLAN_BUCKET / FLOW_PLAN_KEY  where the resolved plan is
 #   FLOW_ENV     staging | dev                            (never prod)
-#   FLOW_CHUNK   the chunk id, recorded in the summary so a run is traceable
+#   FLOW_TARGET  the node pressed, recorded for traceability
+#   FLOW_CHUNK   the chunk it belongs to
 #   DASHBOARD_BUCKET  where the report goes
 #
-# Credentials come from the .env inside that payload, which is what the suite
-# already reads via load_dotenv() in before_all. Nothing is passed in from the
-# caller, so the public endpoint cannot influence who the tests log in as.
+# Credentials come from configs/<env>.yaml inside that payload, plus the .env
+# beside it for the password placeholders — the same two files the Playwright
+# suite reads. Nothing is passed in from the caller, so the public endpoint
+# cannot influence who the browser signs in as.
 #
-# Test failures do NOT fail the build. The build answers "did the run complete",
-# and qa-summary.json answers "did the tests pass" — conflating them would mean a
-# red build whenever a test legitimately caught a regression, and would make the
-# UI unable to tell a broken runner from a broken product.
+# A failing step does NOT fail the build. The build answers "did the run
+# complete", and qa-summary.json answers "did it pass" — conflating them would
+# mean a red build whenever the map correctly caught a regression, and would
+# leave the UI unable to tell a broken runner from a broken product.
 
 env:
   # Returned by BatchGetBuilds, which is how the Lambda tells the dashboard
@@ -35,17 +41,23 @@ env:
 phases:
   pre_build:
     commands:
-      - echo "Chunk $FLOW_CHUNK · selector $FLOW_TAGS · env $FLOW_ENV"
+      - echo "Target $FLOW_TARGET · chunk $FLOW_CHUNK · env $FLOW_ENV"
       - cd "$CODEBUILD_SRC_DIR"
       - test -f requirements.txt || { echo "payload is not a playwright-automation tree"; exit 1; }
-      # Not fatal: a run can still work if every role it touches has a password
-      # committed in configs/<env>.yaml. It fails loudly later if not, and this
-      # line is what makes that failure legible.
-      # Block scalar, not a plain one: YAML reads ": " inside a plain scalar as a
-      # mapping indicator no matter what shell quoting is around it, and
+      - test -f "configs/${FLOW_ENV}.yaml" || { echo "payload has no config for ${FLOW_ENV}"; exit 1; }
+      # Not fatal on its own: roles whose password is a literal in configs still
+      # work. It fails loudly later if a placeholder has no value, and this line
+      # is what makes that failure legible.
+      #
+      # Block scalar, not a plain one: YAML reads ": " inside a plain scalar as
+      # a mapping indicator no matter what shell quoting is around it, and
       # CodeBuild rejects the whole buildspec with a YAML_FILE_ERROR.
       - |
         test -f .env || echo "warning - no .env in the payload, roles with placeholder passwords will fail"
+      # The plan and the runner both travel outside the image, so changing
+      # either takes effect on the next deploy rather than on an image rebuild.
+      - aws s3 cp "s3://${FLOW_PLAN_BUCKET}/${FLOW_PLAN_KEY}" plan.json --only-show-errors
+      - aws s3 cp "s3://${FLOW_PLAN_BUCKET}/flow/run_plan.py" run_plan.py --only-show-errors
       - pip install --quiet --no-cache-dir -r requirements.txt
       # A no-op when requirements pins the version the image baked; a real
       # download when it has moved on. Cheaper than being wrong.
@@ -55,31 +67,22 @@ phases:
     commands:
       - cd "$CODEBUILD_SRC_DIR"
       - rm -rf reports/allure-results && mkdir -p reports/allure-results
-      # Gates mirror behave.ini's default_tags plus tag_map.yaml's
-      # exclude_always, which is exactly what targeted.yml composes.
-      #
-      # --no-skipped overrides behave.ini's show_skipped=true. Without it the
-      # log prints all ~2300 scenarios the tag did not select, which buries the
-      # handful that ran and makes the streamed log useless to read.
       - |
         set +e
-        behave -t "$FLOW_TAGS" \
-          -t ~@wip -t ~@skip -t ~@bug -t ~@deprecated -t ~@needs-automation \
-          --no-skipped \
-          -f pretty -o - \
-          -f allure_behave.formatter:AllureFormatter -o reports/allure-results \
-          -D env="$FLOW_ENV" \
-          -D browser=chromium \
-          -D headless=true \
-          -D screenshot_dir=reports/screenshots
-        echo "behave exited $?"
+        python run_plan.py \
+          --plan plan.json \
+          --repo . \
+          --env "$FLOW_ENV" \
+          --results reports/allure-results \
+          --screenshots reports/screenshots
+        echo "runner exited $?"
         set -e
 
   post_build:
     commands:
       - cd "$CODEBUILD_SRC_DIR"
-      # Runs even when the build phase failed, which is the point: a crashed run
-      # still has partial results worth looking at.
+      # Runs even when the build phase failed, which is the point: a run that
+      # stopped partway still has a result worth looking at.
       - allure generate reports/allure-results -o reports/allure-report --clean
       - |
         node /opt/qa/qa-summary.mjs \
@@ -89,16 +92,16 @@ phases:
           --workflow "Flow run" \
           --run-number "$CODEBUILD_BUILD_NUMBER" \
           --environment "$FLOW_ENV" \
-          --trigger "flow:${FLOW_CHUNK}" \
+          --trigger "flow:${FLOW_TARGET}" \
           --actor "qa-dashboard"
       # --only-show-errors on the sync, not just --no-progress: sync prints a
-      # line per file, and that would bury the scenario summary in the streamed
-      # log. Comments stay out here — CodeBuild echoes block-scalar lines.
+      # line per file, and that would bury the step results in the streamed log.
+      # Comments stay out of the block below — CodeBuild echoes those lines.
       #
-      # One suite folder for every flow run, not one per chunk — 49 folders
-      # would bury the real suites in the dashboard's run list. The chunk lives
-      # in the summary's `trigger` instead. Read the prefix back out of the file
-      # rather than recomputing it: the key embeds a timestamp that would drift.
+      # One suite folder for every flow run, not one per target. The target
+      # lives in the summary's `trigger` instead. Read the prefix back out of
+      # the file rather than recomputing it: the key embeds a timestamp that
+      # would drift.
       - |
         export RUN_PREFIX=$(node -e "process.stdout.write(require('$CODEBUILD_SRC_DIR/reports/allure-report/qa-summary.json').prefix)")
         echo "publishing to s3://${DASHBOARD_BUCKET}/${RUN_PREFIX}/"

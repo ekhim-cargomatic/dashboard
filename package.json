@@ -17,7 +17,7 @@
     "fixtures": "node scripts/make-fixtures.mjs",
     "notion:local": "node infra/notion-agent-task/local-server.mjs",
     "deploy": "bash infra/deploy.sh",
-    "gen:flow-tags": "node scripts/gen-flow-tags.mjs"
+    "flow:targets": "node scripts/flow-targets.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

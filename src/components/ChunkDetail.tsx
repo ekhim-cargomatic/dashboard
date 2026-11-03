@@ -78,8 +78,10 @@ function ApiRow({ flow, call, role }: { flow: Flow; call: ApiCall; role: 'await'
   );
 }
 
-function NodeRow({ flow, node, depth, match }: {
+function NodeRow({ flow, node, depth, match, onRun }: {
   flow: Flow; node: FlowNode; depth: number; match: boolean;
+  /** Absent when no runner is deployed — then the step is description only. */
+  onRun?: (target: string) => void;
 }) {
   const api = node.api;
   const gap = Boolean(
@@ -96,6 +98,20 @@ function NodeRow({ flow, node, depth, match }: {
       id={`fm-${node.id}`}
     >
       <div className="fm-node-head">
+        {onRun && (
+          // On every step, not only the ones that look runnable: whether the
+          // map can be walked this far is a question the function answers, and
+          // the honest answer to "why not this one" is worth a click.
+          <button
+            type="button"
+            className="fm-node-play"
+            onClick={() => onRun(node.id)}
+            title={`Walk the map to ${node.name}`}
+            aria-label={`Run to ${node.name}`}
+          >
+            ▶
+          </button>
+        )}
         <Badge kind={node.kind} />
         <span className="fm-node-name">{node.name}</span>
         {node.required && <span className="fm-chip req">required</span>}
@@ -403,12 +419,14 @@ function Dependencies({ flow, chunk, onSelect }: {
 }
 
 /** Everything about one chunk: what gates it, what it needs, and every step. */
-export function ChunkDetail({ flow, chunk, onlyGaps, matches, onSelect }: {
+export function ChunkDetail({ flow, chunk, onlyGaps, matches, onSelect, onRun }: {
   flow: Flow;
   chunk: FlowChunk;
   onlyGaps: boolean;
   matches: (node: FlowNode) => boolean;
   onSelect: (id: string) => void;
+  /** Open the run dialog for one step. Absent when no runner is deployed. */
+  onRun?: (target: string) => void;
 }) {
   const all = flatten(chunk);
   const gapIds = new Set(unverifiedWrites(chunk).map((n) => n.id));
@@ -421,7 +439,14 @@ export function ChunkDetail({ flow, chunk, onlyGaps, matches, onSelect }: {
       <Dependencies flow={flow} chunk={chunk} onSelect={onSelect} />
       <ol className="fm-nodes">
         {steps.map(({ node, depth }) => (
-          <NodeRow key={node.id} flow={flow} node={node} depth={depth} match={matches(node)} />
+          <NodeRow
+            key={node.id}
+            flow={flow}
+            node={node}
+            depth={depth}
+            match={matches(node)}
+            onRun={onRun}
+          />
         ))}
       </ol>
       {steps.length === 0 && (

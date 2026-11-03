@@ -59,34 +59,78 @@ The flag hides UI, not data. `public/qa-flow/` is served to anyone who asks for 
 Nothing in there is sensitive — selectors and endpoint shapes, no credentials — but
 do not put a fixture password in it on the assumption the flag protects it.
 
-## Running a chunk's tests
+## Running a point on the map
 
-The drawer's **▶ run** button starts the automation for that chunk and watches
-it. What it runs deserves to be stated plainly, because the button could easily
-imply something it does not do:
+Every step in the drawer carries a **▶**, and the chunk header carries **▶ run
+to exit**. Pressing one walks the map to that point in a real browser and stops
+there.
 
-> It runs the **existing tests tagged for that area**. It does not execute the
-> chunk's steps. A chunk's `tags` and a feature file's tags are the same
-> vocabulary, and that is the only bridge between this map and the suite.
+> **The map is the script.** No feature file is read and behave is not run. The
+> `selector`, `action`, `control` and `api.await` already in `cargomatic.json`
+> are what executes. That is the whole point: the map stops being a description
+> of the app and becomes a way to drive it.
 
-So the button names the tag — `▶ run @markets`, not `▶ run` — and the dialog
-says how many scenarios that is before anything starts. Measured against the
-current suite, the 49 chunks fall into three groups:
+### How a point becomes a plan
 
-| | chunks | what the button does |
-|---|---|---|
-| a narrow area tag exists | 36 | runs it, and says how many scenarios |
-| only a broad one exists | 4 | runs it, warning that `@drayage` is 195 scenarios, not one chunk |
-| no area tag the suite carries | 9 | greyed, and names the tag nobody has written a test for |
+Four relationships in the map carry the traversal, and all four were already
+there:
 
-That last group is the useful one: `@carrierPortal`, `@shipperPortal`,
-`@pendingTasks`, `@pricing` and `@auth` are in the map and in no feature file.
-The button is left visible and disabled rather than hidden, because the absence
-is the finding.
+| | what it supplies |
+|---|---|
+| `dependsOn` | the chunks that must have happened first — a sign-in, and any chunk that captures a variable this one needs |
+| `parent` | containment: a field is inside a section is inside a page |
+| `opens` | the 66 buttons that open a modal — the way into its contents |
+| `attachesTo` | the items inside a menu, which do not exist in the DOM until it is open |
+| `edges` | how to reach the 13 chunks that have no page node of their own |
 
-Scope and layer tags are deliberately not selectors. `@smoke` says *when* a test
-runs and `@ui` says *how it is written*; neither names a chunk, so a chunk left
-with only those counts as "no area tag" however few scenarios they would match.
+A plan for `us.admin.modal.submit` comes out as: sign in as admin, go to
+`/users`, click **Register New User**, fill the five fields the form requires,
+click **Register**. Thirteen steps across two chunks, and nothing else on that
+screen is touched — the shipper and carrier forms are sibling branches, so they
+are not on the way.
+
+A dependency is run only as far as it needs to be. A *session* dependency runs
+to the chunk's exit, because that is the map's statement that it finished. A
+*data* dependency runs to the step that captures the variable, which is often
+past the exit: the exit of **Leg management** is the table being rendered, but
+`{jobId}` only exists once a row has been opened.
+
+### What it can reach
+
+`npm run flow:targets` answers this from the real resolver rather than an
+estimate:
+
+```
+1246 of 1999 points on the map can be run
+35 of 49 chunks have at least one
+15.2 steps in an average plan
+```
+
+The rest, in order of how many they account for: mobile screens (Appium
+locators, which Playwright cannot drive), nodes with no selector authored, a
+typeahead with no `then` naming the list its suggestions appear in, chunks that
+need a `{shipperId}` or `{carrierId}` the fixture is expected to supply, file
+uploads, and selectors with a `{label}`-style parameter the map does not fill.
+
+Each of those is a specific, fixable gap in a specific node, and the dialog
+names it rather than greying the button out — a step that cannot be run is more
+useful when it says why.
+
+### Values
+
+The map carries a selector for all 441 of its fields and a value for none of
+them, so the runner makes one up from the field's control type and name:
+`QA`/`Test` for names, a unique `qa+NNNN@cargomatic.com` for emails, today for
+dates, the first real option for a select.
+
+Two cases are not guesswork. **Credentials** — every field on a sign-in screen,
+and any field marked `secret` — resolve on the runner from the suite's own
+`configs/<env>.yaml`, so no credential is ever in a plan, in the dialog or in
+the log. **Typeaheads** search for the suite's fixture records, because a search
+box shows nothing until what you type matches something that exists, and "QA"
+matches no shipper on staging.
+
+Every other value is shown in the dialog, editable, before anything runs.
 
 ### What happens when you press it
 
@@ -94,34 +138,42 @@ with only those counts as "no area tag" however few scenarios they would match.
                                      s3://…-qa-flow-src/suite.zip  (private)
                                             │  uploaded by --push-tests
                                             ▼
-drawer ──POST /api/run-flow──> Lambda ──StartBuild──> CodeBuild
-                                                        behave · allure
-                                                        aws s3 sync -> runs/flow-run/
-drawer <──GET /api/run-flow?build=…── phase, then the run appears in the runs list
+dialog ──GET  ?plan=<node>──> Lambda  resolves the plan from its copy of the map
+dialog ──POST /api/run-flow─> Lambda ──plan to S3──> CodeBuild
+                                                       run_plan.py · allure
+                                                       aws s3 sync -> runs/flow-run/
+dialog <──GET ?build=…&since=── phase + new log lines, step by step
 ```
 
-The suite is uploaded from a workstation rather than cloned, so no git
-credential exists anywhere in this system. `./infra/deploy-flow-fn.sh
---push-tests` re-uploads it in a few seconds after you edit a test. The suite's
-`.env` travels inside that private payload, which is what `before_all` already
-reads — so no credential is stored anywhere else, and none is ever sent from the
-browser.
+The preview and the run are the same resolver call, so the dialog cannot promise
+something different from what happens. The plan travels through S3 rather than a
+build environment variable, because a long one is tens of kilobytes.
+
+The suite is uploaded from a workstation rather than cloned, so no git credential
+exists anywhere in this system. `./infra/deploy-flow-fn.sh --push-tests`
+re-uploads it in a few seconds after you edit a test; `--code-only` republishes
+the function, which is also what ships a changed map.
 
 The run publishes into the same `runs/` prefix as every CI run, with the same
 `qa-summary.json`, so it shows up in the dashboard like any other — no special
-case on the reading side. All flow runs share one `flow-run` suite folder rather
-than one per chunk, which would bury the real suites; the chunk id is recorded
-in the summary's `trigger`.
+case on the reading side. `run_plan.py` writes Allure results directly, one test
+case per run with a step per plan step. All flow runs share one `flow-run` suite
+folder rather than one per target, which would bury the real suites; the target
+is recorded in the summary's `trigger`.
 
 **One build at a time.** That caps spend, but mostly it stops two runs fighting
 over the same staging records — a failure mode that looks exactly like a product
 bug and wastes an afternoon.
 
 **The endpoint is public and unauthenticated**, like the rest of the dashboard.
-It is kept harmless by being unable to do much: a hardcoded CodeBuild project, a
-tag allowlist baked in from this map, `staging`/`dev` only, and the one-at-a-time
-rule. It cannot run an arbitrary behave expression. See the header of
-`infra/flow-run-fn/index.mjs`.
+It is kept harmless by what it is able to accept: a caller names a *node on the
+map* and nothing else. Every selector, gesture and page is resolved inside the
+function from its own copy of the map, so no selector ever crosses the wire and
+the endpoint cannot be asked to drive a signed-in staging browser somewhere the
+map does not already describe. Field values are the one caller-supplied thing,
+and they are length-capped, stripped of control characters, and never applied to
+a credential. Add a hardcoded project, `staging`/`dev` only, and the
+one-at-a-time rule. See the header of `infra/flow-run-fn/index.mjs`.
 
 ### Working on it without spending anything
 
@@ -130,17 +182,20 @@ CodeBuild, so the dialog's polling, phase labels and failure states can be
 developed without starting a build:
 
 ```
-npm i --no-save @aws-sdk/client-codebuild
+npm i --no-save @aws-sdk/client-codebuild @aws-sdk/client-s3 @aws-sdk/client-cloudwatch-logs
 node infra/flow-run-fn/local-server.mjs          # --fail to see a red run
 ```
 
 then point `public/config.json` (gitignored) at
 `"runFlowUrl": "http://localhost:8788/api/run-flow"`.
 
-The tag counts come from `npm run gen:flow-tags`, which reads the feature files
-and writes `src/lib/flow-tags.generated.ts`. **Re-run it when features are added
-or retagged** — otherwise the dialog promises a scenario count the suite no
-longer has.
+Plans there are resolved by the real resolver against the real map, so what the
+dialog shows is what a deployed run would do — only the build is simulated. The
+fake build narrates the plan back one step at a time, which is the only way to
+see the log panel's tail-following and colouring without spending minutes.
+
+`npm run flow:targets` prints which points on the map can be walked to and why
+the rest cannot; `npm run flow:targets <node id>` prints one plan in full.
 
 ## Why each piece is shaped the way it is
 

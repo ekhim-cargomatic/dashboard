@@ -209,17 +209,25 @@ That regenerates `src/lib/domains.generated.ts` (the SPA) and
 
 ### The flow map's play button
 
-Pressing **▶ run** on a chunk starts its tests in CodeBuild and publishes the
-report back into `runs/`, where the dashboard reads it like any other run. See
-[docs/qa-flow.md](docs/qa-flow.md) for what it does and does not run — the short
-version is that it runs *the existing tests tagged for that area*, not the
-chunk's steps.
+Every step on the map has a **▶**. Pressing it walks the map to that step in a
+real browser — signing in, navigating, opening the modals on the way, filling
+what the form requires — and stops on the step you pressed. The report lands in
+`runs/`, where the dashboard reads it like any other run.
+
+**The map is the script.** No feature file is involved and behave is not run:
+the selectors, gestures and API waits in `cargomatic.json` are what executes.
+1,246 of its 1,999 nodes can be reached this way; `npm run flow:targets` prints
+that split and why the rest cannot.
+
+```bash
+npm run flow:targets                   # what can be run, and why the rest cannot
+npm run flow:targets us.admin.modal.submit   # one plan, step by step
+```
 
 Provisioning is a one-off and depends on `deploy-notion-fn.sh` having run first,
 because it shares that script's HTTP API and CloudFront `/api/*` behavior:
 
 ```bash
-npm run gen:flow-tags          # the tag allowlist is baked in from this
 ./infra/deploy-flow-fn.sh      # payload bucket, ECR image, CodeBuild, Lambda, routes
 # then put RUN_FLOW_URL=/api/run-flow in infra/deploy.env
 ./infra/deploy.sh --app-only
@@ -234,25 +242,32 @@ system, and editing a test costs an upload rather than an image rebuild:
 ./infra/deploy-flow-fn.sh --push-tests     # a few seconds; next build picks it up
 ```
 
-Credentials ride along in that payload as the suite's own `.env`, which
-`before_all` already loads — so there is nothing to put in SSM and no password
-to type. All three of `SHIPPER_PASS`, `CARRIER_PASS` and `DRIVER_PASS` must be
-present even for an admin-only run: `utils/config.py` resolves every role
-eagerly, so one missing value fails the suite before the first scenario.
+Credentials ride along in that payload as `configs/<env>.yaml` plus the suite's
+own `.env` — so there is nothing to put in SSM and no password to type. The
+runner reads them with the suite's own rule: a password shaped like
+`shipper_pass` names an environment variable, anything else is the password. A
+plan never carries one. A step that needs a credential carries a marker, and the
+marker is resolved on the runner, so nothing secret reaches the browser, the
+dialog or the log.
 
 > The payload bucket is created with public access blocked and SSE-S3 on, and
 > the script refuses to use the dashboard bucket for it — that one grants
 > `s3:GetObject` to `*`, which would publish the credentials. `config.json` is
 > served from it too, so nothing secret can go there either.
 
-Re-run `npm run gen:flow-tags` whenever feature files are added or retagged;
-`src/lib/flow-tags.generated.ts` is committed, and a stale copy makes the dialog
-promise a scenario count the suite no longer has.
+The flow map is deployed inside the function, which is what plans are resolved
+from. `./infra/deploy-flow-fn.sh --code-only` is what republishes it after the
+map changes.
 
 > **The endpoint is public and unauthenticated**, like everything else here. Its
-> safety is that it can only start one hardcoded project, with a tag from a
-> baked-in allowlist, against staging or dev, one build at a time. A leaked URL
-> costs you unwanted staging runs — serially, from a fixed list.
+> safety is that the caller names a *node on the map* and nothing else: every
+> selector and every gesture is resolved inside the function, from its own copy
+> of the map, so the endpoint cannot be asked to drive the browser somewhere the
+> map does not already describe. Field values are the one thing a caller
+> supplies, and they are length-capped, stripped of control characters, and
+> never applied to a credential. One hardcoded project, staging or dev only, one
+> build at a time. A leaked URL costs you unwanted staging runs — serially, from
+> what the map already documents.
 
 ---
 
@@ -425,8 +440,7 @@ src/
     aggregate.ts           cross-run analysis: trends, impact, heatmap, flakiness
     status.ts              status palette + the magnitude ramp
     domains.generated.ts   AUTO-GENERATED from tag_map.yaml
-    flowRun.ts             which tag a flow chunk runs, and the build that runs it
-    flow-tags.generated.ts AUTO-GENERATED from the feature files
+    flowRun.ts             asks the function for a plan, then watches it run
   components/              charts and tables
 ci/
   publish-to-s3.sh         manual publish / backfill, same layout as CI
@@ -436,12 +450,14 @@ ci/
 infra/
   deploy.sh                provision + deploy
   cloudfront-function.js   routing, with the listing carve-out
-  flow-run-fn/             the only thing that can start a test run
-  flow-runner/             the image and buildspec that run the suite
+  flow-run-fn/             the only thing that can start a run
+    plan.mjs               a point on the map → the steps to reach it
+  flow-runner/             the image, buildspec and the browser that walks a plan
+    run_plan.py            performs a plan; the map is the script
   deploy-flow-fn.sh        provisions both, idempotently
 scripts/
   gen-domains.mjs          tag_map.yaml → the two generated files
-  gen-flow-tags.mjs        feature files → what each tag actually covers
+  flow-targets.mjs         what on the map can be run, and why the rest cannot
   make-fixtures.mjs        deterministic Allure-shaped fixture runs
 ```
 

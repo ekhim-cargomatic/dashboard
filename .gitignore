@@ -27,3 +27,8 @@ _to_delete/
 
 # Python bytecode from scripts/validate-flow.py
 __pycache__/
+
+# Copied beside the function at deploy time (and by local-server.mjs) so plans
+# resolve from the same map the dashboard serves. The original is the one in
+# public/qa-flow; a committed duplicate is a second copy to forget to update.
+infra/flow-run-fn/cargomatic.json

@@ -124,38 +124,23 @@ if [[ "$MODE" == all && -z "${ALLOWED_ORIGIN:-}" ]]; then
 fi
 
 # --------------------------------------------------------------------------- #
-# The tag allowlist
+# The flow map
 # --------------------------------------------------------------------------- #
-# Baked into the function so the endpoint cannot run an arbitrary behave
-# expression. Exactly the area tags the flow map names that real feature files
-# carry — the same rule resolve() applies in src/lib/flowRun.ts.
-
-build_allowlist() {
-  node -e '
-    const fs = require("fs");
-    const tags = JSON.parse(fs.readFileSync("ci/flow-tags.generated.json", "utf8")).tags;
-    const domains = JSON.parse(fs.readFileSync("ci/domains.generated.json", "utf8"));
-    const flow = JSON.parse(fs.readFileSync("public/qa-flow/cargomatic.json", "utf8"));
-    const generic = new Set([...(domains.scopes ?? []), ...(domains.layers ?? [])]);
-    const out = new Set();
-    for (const chunk of flow.chunks ?? []) {
-      for (const raw of chunk.tags ?? []) {
-        const bare = raw.replace(/^@/, "");
-        if (generic.has(bare.toLowerCase()) || bare.startsWith("auth.")) continue;
-        if (tags[bare.toLowerCase()]) out.add(bare);
-      }
-    }
-    process.stdout.write([...out].sort().join(","));
-  ' 2>/dev/null
-}
+# Deployed inside the function, where it is both the thing plans are resolved
+# from and the allowlist of what may be run. A caller names a node; a node
+# exists only if the map says so. That is a tighter bound than a list of tags
+# and it cannot drift from what the dashboard draws, because it is the same
+# file the dashboard serves.
 
 cd "$ROOT"
-[[ -f ci/flow-tags.generated.json ]] || {
-  echo "error: ci/flow-tags.generated.json is missing. Run: npm run gen:flow-tags" >&2
-  exit 1
-}
-ALLOWED_TAGS="$(build_allowlist)"
-[[ -n "$ALLOWED_TAGS" ]] || { echo "error: tag allowlist came out empty" >&2; exit 1; }
+FLOW_MAP="public/qa-flow/cargomatic.json"
+[[ -f "$FLOW_MAP" ]] || { echo "error: $FLOW_MAP is missing" >&2; exit 1; }
+node -e '
+  const flow = JSON.parse(require("fs").readFileSync("public/qa-flow/cargomatic.json", "utf8"));
+  const nodes = (flow.chunks ?? []).reduce((n, c) => n + (c.nodes?.length ?? 0), 0);
+  if (!nodes) { console.error("error: the flow map has no nodes"); process.exit(1); }
+  process.stderr.write(`  flow map: ${flow.chunks.length} chunks, ${nodes} nodes\n`);
+' || exit 1
 
 # --------------------------------------------------------------------------- #
 # Test payload
@@ -233,8 +218,18 @@ push_tests() {
   rm -rf "$STAGE" "$(dirname "$ZIP_SRC")"
 }
 
+# The executor travels outside the image for the same reason the suite does:
+# it changes while the browser and the system libraries around it do not, and
+# a change to it should cost seconds rather than an image rebuild and push.
+push_runner() {
+  log "Uploading the plan runner"
+  aws s3 cp "$HERE/flow-runner/run_plan.py" "s3://${SRC_BUCKET}/flow/run_plan.py" --only-show-errors
+  echo "  uploaded run_plan.py ($(wc -l < "$HERE/flow-runner/run_plan.py" | tr -d ' ') lines)"
+}
+
 if [[ "$MODE" == tests ]]; then
   push_tests
+  push_runner
   echo
   echo "Done. The next build picks it up — no redeploy needed."
   exit 0
@@ -406,35 +401,42 @@ if [[ "$MODE" == all ]]; then
     --policy-document "$(jq -n \
       --arg arn "arn:aws:codebuild:${REGION}:${ACCOUNT_ID}:project/${PROJECT}" \
       --arg logs "arn:aws:logs:${REGION}:${ACCOUNT_ID}:log-group:/aws/codebuild/${PROJECT}:*" \
+      --arg plans "arn:aws:s3:::${SRC_BUCKET}/plans/*" \
       '{Version:"2012-10-17", Statement:[
          {Effect:"Allow",
           Action:["codebuild:StartBuild","codebuild:BatchGetBuilds","codebuild:ListBuildsForProject"],
           Resource:$arn},
          {Effect:"Allow",
           Action:["logs:GetLogEvents"],
-          Resource:$logs}]}')" >/dev/null
+          Resource:$logs},
+         {Effect:"Allow",
+          Action:["s3:PutObject"],
+          Resource:$plans}]}')" >/dev/null
 fi
 
 FN_ROLE_ARN="$(aws iam get-role --role-name "$FN_ROLE" --query 'Role.Arn' --output text)"
 
 log "Packaging $HERE/flow-run-fn"
 PKG="$(mktemp -d)"
-cp "$HERE/flow-run-fn/index.mjs" "$PKG/"
+cp "$HERE/flow-run-fn/index.mjs" "$HERE/flow-run-fn/plan.mjs" "$PKG/"
+# The map ships inside the function: resolving a plan has to be something the
+# endpoint can do without reaching for anything a caller could influence.
+cp "$ROOT/$FLOW_MAP" "$PKG/cargomatic.json"
 # Bundled rather than relied upon: which @aws-sdk clients the Node runtime
 # pre-installs has changed between Lambda Node versions, and discovering that
 # at run time costs a deploy cycle. 2MB is cheaper than the surprise.
 ( cd "$PKG" && npm install --silent --no-save --no-package-lock \
-    @aws-sdk/client-codebuild @aws-sdk/client-cloudwatch-logs >/dev/null 2>&1 )
+    @aws-sdk/client-codebuild @aws-sdk/client-cloudwatch-logs @aws-sdk/client-s3 >/dev/null 2>&1 )
 ZIP="$(mktemp -d)/function.zip"
 ( cd "$PKG" && zip -qr "$ZIP" . )
 
 ENV_JSON="$(jq -n \
   --arg project "$PROJECT" \
-  --arg tags "$ALLOWED_TAGS" \
+  --arg plans "$SRC_BUCKET" \
   --arg bucket "$BUCKET" \
   --arg origin "${ALLOWED_ORIGIN:-}" \
   --arg dash "${DASHBOARD_TOKEN:-}" \
-  '{Variables: ({PROJECT_NAME: $project, ALLOWED_TAGS: $tags, DASHBOARD_BUCKET: $bucket,
+  '{Variables: ({PROJECT_NAME: $project, PLAN_BUCKET: $plans, DASHBOARD_BUCKET: $bucket,
                  ALLOWED_ORIGIN: $origin}
                 + (if $dash == "" then {} else {DASHBOARD_TOKEN: $dash} end))}')"
 
@@ -462,6 +464,10 @@ else
 fi
 
 rm -rf "$PKG" "$(dirname "$ZIP")"
+
+# Before the early exit: --code-only is the common redeploy, and the executor
+# changes at least as often as the function does.
+push_runner
 
 [[ "$MODE" == code ]] && { echo; echo "Code pushed to $FN_NAME."; exit 0; }
 
@@ -519,8 +525,13 @@ Done.
   Project       $PROJECT
   Image         ${ECR_URI}:latest
   Tests         s3://${SRC_BUCKET}/${SRC_KEY}  (private)
+  Runner        s3://${SRC_BUCKET}/flow/run_plan.py
+  Plans         s3://${SRC_BUCKET}/plans/  (written by the function, read by the build)
   Reached at    ${ALLOWED_ORIGIN:-<origin>}/api/run-flow
-  Allowed tags  $(echo "$ALLOWED_TAGS" | tr ',' ' ' | wc -w | tr -d ' ') tags from the flow map
+
+Which points on the map can be run, and why the rest cannot:
+
+  npm run flow:targets
 
 After editing tests, re-upload them — no redeploy, a few seconds:
 
@@ -537,7 +548,7 @@ smallest real tag in the suite:
 
   aws codebuild start-build --region $REGION --project-name $PROJECT \\
     --environment-variables-override \\
-      name=FLOW_TAGS,value=@markets name=FLOW_CHUNK,value=markets
+      name=FLOW_PLAN_BUCKET,value=$SRC_BUCKET name=FLOW_PLAN_KEY,value=plans/<key>.json
   aws s3 ls s3://${BUCKET}/runs/flow-run/
 
 EOF

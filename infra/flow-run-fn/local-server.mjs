@@ -2,12 +2,13 @@
 /**
  * Run the flow-run function locally, against a simulated CodeBuild.
  *
- * Wraps the REAL index.mjs rather than reimplementing it, so the validation the
- * dialog meets here — tag allowlist, env check, body limits, the one-at-a-time
- * rule — is the same code that will meet it in production. Only the AWS calls
- * are faked, by patching the SDK client's send() before the handler imports it.
+ * Wraps the REAL index.mjs rather than reimplementing it, so the plans the
+ * dialog shows here are resolved by the same resolver production uses, and the
+ * validation it meets — node ids, env check, value checks, body limits, the
+ * one-at-a-time rule — is the same code. Only the AWS calls are faked, by
+ * patching each SDK client's send() before the handler imports it.
  *
- *   npm i --no-save @aws-sdk/client-codebuild   # once
+ *   npm i --no-save @aws-sdk/client-codebuild @aws-sdk/client-s3   # once
  *   node infra/flow-run-fn/local-server.mjs
  *
  * Then point the SPA at it, in public/config.json (gitignored):
@@ -57,7 +58,14 @@ function snapshot(id) {
     id,
     currentPhase: phase,
     buildStatus: done ? (FAIL ? 'FAILED' : 'SUCCEEDED') : 'IN_PROGRESS',
-    logs: { deepLink: `http://localhost:${PORT}/fake-logs/${encodeURIComponent(id)}` },
+    // groupName and streamName as well as the link: the handler tails the log
+    // through them, and a fake build without them silently returns no output —
+    // which looks exactly like a build that printed nothing.
+    logs: {
+      deepLink: `http://localhost:${PORT}/fake-logs/${encodeURIComponent(id)}`,
+      groupName: `/aws/codebuild/${PROJECT}`,
+      streamName: id.split(':')[1],
+    },
     exportedEnvironmentVariables: done
       ? [{ name: 'RUN_PREFIX', value: `runs/flow-run/20261028T120000Z-${build.number}` }]
       : [],
@@ -65,15 +73,32 @@ function snapshot(id) {
 }
 
 let sdk;
+let s3sdk;
+let logsSdk;
 try {
   sdk = await import('@aws-sdk/client-codebuild');
+  s3sdk = await import('@aws-sdk/client-s3');
+  logsSdk = await import('@aws-sdk/client-cloudwatch-logs');
 } catch {
   console.error(
-    'error: @aws-sdk/client-codebuild is not installed.\n'
-    + '       npm i --no-save @aws-sdk/client-codebuild',
+    'error: the AWS SDK clients are not installed.\n'
+    + '       npm i --no-save @aws-sdk/client-codebuild @aws-sdk/client-s3'
+    + ' @aws-sdk/client-cloudwatch-logs',
   );
   process.exit(1);
 }
+
+/** The plan the function hands over. Kept so the fake log can narrate it. */
+let lastPlan = null;
+
+s3sdk.S3Client.prototype.send = async function send(command) {
+  if (command.constructor.name === 'PutObjectCommand') {
+    lastPlan = JSON.parse(command.input.Body);
+    console.log(`plan   ${command.input.Key}  (${lastPlan.steps.length} steps)`);
+    return {};
+  }
+  throw new Error(`local-server does not simulate ${command.constructor.name}`);
+};
 
 let counter = 0;
 // The handler builds its client at module scope, so this has to be in place
@@ -103,32 +128,61 @@ sdk.CodeBuildClient.prototype.send = async function send(command) {
   throw new Error(`local-server does not simulate ${name}`);
 };
 
+/**
+ * The log, narrated from the plan at the pace the fake build runs.
+ *
+ * Not decoration: the dialog's log panel is the part hardest to get right —
+ * following the tail, releasing it when you scroll, colouring the ✓ and ✗ — and
+ * none of that can be seen against a build that prints nothing.
+ */
+logsSdk.CloudWatchLogsClient.prototype.send = async function send(command) {
+  if (command.constructor.name !== 'GetLogEventsCommand') {
+    throw new Error(`local-server does not simulate ${command.constructor.name}`);
+  }
+  if (!lastPlan) return { events: [], nextForwardToken: 'f/0' };
+
+  const build = [...builds.values()].pop();
+  const elapsed = build ? Date.now() - build.startedAt : 0;
+  // Start printing once the fake build reaches BUILD, then one step per 400ms.
+  const reached = Math.max(0, Math.floor((elapsed - 8500) / 400));
+
+  const lines = [
+    `flow: ${lastPlan.chunkName} — ${lastPlan.targetName}`,
+    `target ${lastPlan.target} · ${lastPlan.steps.length} steps · staging`,
+    `chunks: ${lastPlan.chunks.join(' -> ')}`,
+    '',
+    ...lastPlan.steps.slice(0, reached).map((step, i) =>
+      `${String(i + 1).padStart(2)}/${lastPlan.steps.length}  ${step.verb.padEnd(13)} ${step.name}`
+      + `  ${FAIL && i === lastPlan.steps.length - 1 ? '✗  never became visible' : '✓'}`),
+  ];
+  if (reached >= lastPlan.steps.length) {
+    const passed = FAIL ? lastPlan.steps.length - 1 : lastPlan.steps.length;
+    lines.push('', `${passed}/${lastPlan.steps.length} steps passed in 12.0s — ${FAIL ? 'failed' : 'passed'}`);
+  }
+
+  const from = Number(String(command.input.nextToken ?? 'f/0').slice(2));
+  const fresh = lines.slice(from);
+  return {
+    events: fresh.map((message) => ({ message })),
+    nextForwardToken: `f/${from + fresh.length}`,
+  };
+};
+
 // ---------------------------------------------------------------- the app --
 
 process.env.PROJECT_NAME ??= PROJECT;
 process.env.DASHBOARD_BUCKET ??= 'local-bucket';
+process.env.PLAN_BUCKET ??= 'local-plans';
 process.env.ALLOWED_ORIGIN ??= 'http://localhost:5173';
-// The real allowlist, so a tag the deployed function would reject is rejected
-// here too. Falls back to the flow map's tags if the generated file is absent.
-if (!process.env.ALLOWED_TAGS) {
-  const { readFileSync } = await import('node:fs');
-  try {
-    const tags = JSON.parse(readFileSync('ci/flow-tags.generated.json', 'utf8')).tags;
-    const domains = JSON.parse(readFileSync('ci/domains.generated.json', 'utf8'));
-    const flow = JSON.parse(readFileSync('public/qa-flow/cargomatic.json', 'utf8'));
-    const generic = new Set([...(domains.scopes ?? []), ...(domains.layers ?? [])]);
-    const out = new Set();
-    for (const chunk of flow.chunks ?? []) {
-      for (const raw of chunk.tags ?? []) {
-        const bare = raw.replace(/^@/, '');
-        if (generic.has(bare.toLowerCase()) || bare.startsWith('auth.')) continue;
-        if (tags[bare.toLowerCase()]) out.add(bare);
-      }
-    }
-    process.env.ALLOWED_TAGS = [...out].sort().join(',');
-  } catch {
-    console.error('warning: could not build the tag allowlist — run `npm run gen:flow-tags`');
-    process.env.ALLOWED_TAGS = '';
+// The flow map has to sit beside index.mjs, the way the deploy script puts it
+// there — it is what plans are resolved from, and the handler reads it at
+// import time.
+{
+  const { copyFileSync, existsSync } = await import('node:fs');
+  const here = new URL('.', import.meta.url).pathname;
+  if (!existsSync(`${here}cargomatic.json`)) {
+    copyFileSync('public/qa-flow/cargomatic.json', `${here}cargomatic.json`);
+    console.log('copied public/qa-flow/cargomatic.json next to index.mjs');
   }
 }
 
@@ -159,11 +213,11 @@ createServer((req, res) => {
     }
   });
 }).listen(PORT, () => {
-  const count = process.env.ALLOWED_TAGS.split(',').filter(Boolean).length;
   console.log(
     `flow-run function on http://localhost:${PORT}  (simulated CodeBuild`
     + `${FAIL ? ', builds FAIL' : ''})\n`
-    + `  ${count} tags allowed · a run takes ~20s · origin ${process.env.ALLOWED_ORIGIN}\n`
+    + `  plans resolved from the real flow map · a run takes ~20s`
+    + ` · origin ${process.env.ALLOWED_ORIGIN}\n`
     + `  point public/config.json at: "runFlowUrl": "http://localhost:${PORT}/api/run-flow"`,
   );
 });

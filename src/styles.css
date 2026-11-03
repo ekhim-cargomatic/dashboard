@@ -1610,11 +1610,12 @@ button.btn.shot:hover {
 .fm-about-btn:hover { background: var(--ghost); color: var(--text-primary); }
 
 /* ── running a chunk's tests ────────────────────────────────────────────── */
-/*
-   The play button sits in the drawer's action row beside "copy". It names the
-   tag it would run, because "run" alone would imply the map's steps are what
-   executes — and they are not. A chunk with no tests keeps the button, greyed,
-   rather than hiding it: the absence is information.
+/* The play button on a chunk's header, and the one on every step.
+
+   It says "run to exit" rather than "run", because what it does is walk the map
+   from a sign-in to this point, not execute the chunk in isolation. The one on
+   a step is a bare triangle: there is one on every row, and a label on each
+   would turn the list of steps into a list of buttons.
 */
 .fm-run-play {
   border: 1px solid var(--border); border-radius: var(--radius-sm);
@@ -1623,8 +1624,19 @@ button.btn.shot:hover {
   padding: 5px 9px; cursor: pointer; white-space: nowrap;
 }
 .fm-run-play:hover { background: var(--ghost); color: var(--text-primary); border-color: var(--axis); }
-.fm-run-play.is-empty { color: var(--text-muted); cursor: help; }
-.fm-run-play.is-empty:hover { background: var(--surface-1); color: var(--text-muted); }
+
+/* Dim until the row is hovered or the button is focused. Every step has one, and
+   49 chunks' worth of always-visible triangles reads as clutter down the side of
+   the list rather than as an affordance. Focus is exempt so it stays reachable
+   from the keyboard. */
+.fm-node-play {
+  border: 0; background: none; padding: 0 4px 0 0; margin-left: -4px;
+  color: var(--text-muted); font-size: 10px; line-height: 1;
+  cursor: pointer; opacity: 0; transition: opacity 90ms ease, color 90ms ease;
+}
+.fm-node:hover .fm-node-play,
+.fm-node-play:focus-visible { opacity: 1; }
+.fm-node-play:hover { color: var(--accent); }
 
 /* Centred, unlike the chunk drawer — it is a decision, not a document. */
 .fm-dialog-run { width: min(760px, 94vw); height: auto; max-height: 88vh; }
@@ -1705,3 +1717,72 @@ button.btn.shot:hover {
 .fm-run-log .fg-head { color: var(--text-primary); font-weight: 600; }
 .fm-run-log .fg-bad  { color: var(--status-critical); }
 .fm-run-log .fg-good { color: var(--success-text); }
+
+
+/* The plan, step by step.
+
+   This list is the argument for the button: you can read exactly what will
+   happen before anything does. It is dense on purpose — a twenty-step plan has
+   to stay scannable — so each row is one line of verb, target, value and the
+   reason the step is there at all.
+*/
+.fm-run-chain { color: var(--text-muted); font-size: 12px; }
+.fm-run-chain .fm-run-arrow { color: var(--axis); }
+
+.fm-run-toggle {
+  align-self: flex-start; border: 0; background: none; padding: 2px 0;
+  color: var(--text-secondary); font-family: inherit; font-size: 12px; cursor: pointer;
+}
+.fm-run-toggle:hover { color: var(--text-primary); }
+
+.fm-run-steps {
+  margin: 0; padding: 8px 10px; list-style: none; counter-reset: step;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  max-height: 260px; overflow: auto;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.fm-run-steps li {
+  display: flex; align-items: baseline; gap: 7px;
+  font-size: 12px; line-height: 1.5; counter-increment: step;
+}
+.fm-run-steps li::before {
+  content: counter(step); color: var(--text-muted);
+  font-variant-numeric: tabular-nums; min-width: 18px; text-align: right;
+}
+/* A step the map marks destructive earns a marker in the margin: it is the one
+   thing in a plan worth noticing before pressing run. */
+.fm-run-steps li.is-destructive::before { color: var(--status-critical); font-weight: 700; }
+
+.fm-run-verb { color: var(--text-muted); min-width: 82px; }
+.fm-run-step-name { color: var(--text-primary); }
+.fm-run-value {
+  font-size: 11px; padding: 1px 5px; border-radius: 3px;
+  background: var(--ghost); color: var(--text-secondary);
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Never a real credential — the runner resolves those. Italic so it reads as a
+   description of where the value comes from rather than as the value. */
+.fm-run-value.is-secret { font-style: italic; color: var(--text-muted); background: none; }
+.fm-run-why {
+  margin-left: auto; color: var(--text-muted); font-size: 11px;
+  white-space: nowrap; padding-left: 10px;
+}
+
+.fm-run-field { display: flex; align-items: center; gap: 10px; }
+.fm-run-field label {
+  font-size: 12px; color: var(--text-secondary);
+  min-width: 150px; display: flex; align-items: center; gap: 6px;
+}
+.fm-run-input {
+  flex: 1; font-family: inherit; font-size: 13px; padding: 6px 9px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-1); color: var(--text-primary);
+}
+.fm-run-input:disabled { opacity: 0.6; }
+
+/* Why a point on the map cannot be walked to. Listed rather than summarised:
+   each one names a specific thing missing from a specific node, which is what
+   makes it fixable. */
+.fm-run-blockers { margin: 0; padding-left: 18px; font-size: 12px; color: var(--text-secondary); }
+.fm-run-blockers li { margin-bottom: 3px; }
