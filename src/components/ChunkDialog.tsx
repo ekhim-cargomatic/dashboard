@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { ChunkDetail, Copy } from './ChunkDetail';
-import { RunFlowDialog } from './RunFlowDialog';
 import { canRunFlow } from '../lib/flowRun';
 import type { Flow, FlowChunk, FlowNode } from '../lib/flow';
 import type { AppConfig } from '../types';
@@ -33,14 +32,17 @@ interface Props {
   /** Following a dependency link swaps the dialog's subject — it does not close. */
   onSelect: (id: string) => void;
   onClose: () => void;
+  /**
+   * Run a point on the map. Handled by the map rather than here because the
+   * run panel is a drawer in the same place this one is, and because the tree
+   * it lights up is behind both.
+   */
+  onRun: (target: string) => void;
 }
 
-export function ChunkDialog({ config, flow, chunk, onlyGaps, matches, onSelect, onClose }: Props) {
+export function ChunkDialog({ config, flow, chunk, onlyGaps, matches, onSelect, onClose, onRun }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const body = useRef<HTMLDivElement>(null);
-  // Which point on the map the run dialog is open for, if any. A step, or the
-  // chunk's exit when the button in the header is the one pressed.
-  const [runTarget, setRunTarget] = useState<string | null>(null);
 
   // Hidden rather than disabled when the runner is not provisioned: a button
   // that can never work is worse than no button. Whether a given point can
@@ -55,7 +57,7 @@ export function ChunkDialog({ config, flow, chunk, onlyGaps, matches, onSelect, 
 
   // A different chunk is a different document: start it at the top, the way
   // the panel used to, rather than halfway down the previous chunk's steps.
-  useEffect(() => { body.current?.scrollTo({ top: 0 }); setRunTarget(null); }, [chunk.id]);
+  useEffect(() => { body.current?.scrollTo({ top: 0 }); }, [chunk.id]);
 
   return (
     <dialog
@@ -87,7 +89,7 @@ export function ChunkDialog({ config, flow, chunk, onlyGaps, matches, onSelect, 
               <button
                 type="button"
                 className="fm-run-play"
-                onClick={() => setRunTarget(chunk.exit)}
+                onClick={() => onRun(chunk.exit)}
                 title={`Walk the map to this chunk's exit, ${chunk.exit}`}
               >
                 ▶ run to exit
@@ -113,14 +115,10 @@ export function ChunkDialog({ config, flow, chunk, onlyGaps, matches, onSelect, 
             onlyGaps={onlyGaps}
             matches={matches}
             onSelect={onSelect}
-            onRun={runnable ? setRunTarget : undefined}
+            onRun={runnable ? onRun : undefined}
           />
         </div>
       </div>
-
-      {runTarget && config && (
-        <RunFlowDialog config={config} target={runTarget} onClose={() => setRunTarget(null)} />
-      )}
     </dialog>
   );
 }

@@ -36,7 +36,8 @@ export interface PlanStep {
   secret?: boolean;
   /** Whose account a sign-in credential belongs to — never the value itself. */
   role?: string;
-  control?: string;
+  /** Which half of a sign-in a secret step is: 'username' or 'password'. */
+  credField?: string;
   await?: { method: string; path: string };
   destructive?: boolean;
 }
@@ -206,4 +207,78 @@ export async function watchRun(
       return handle;
     }
   }
+}
+
+/**
+ * How far a run has got, read off its own output.
+ *
+ * CodeBuild reports a build phase, not a step, so the only signal fine-grained
+ * enough to light up the map is the runner's own per-step line:
+ *
+ *     4/7  click         Sign in  ✓  clicked Sign in — POST /v2/users/login 200
+ *
+ * Parsing a log is usually a bad idea, but this one is not prose: run_plan.py
+ * is the sole writer of that line and the dashboard is its only reader, so the
+ * format is a contract between the two rather than something being scraped.
+ *
+ * The line is printed *after* a step finishes, so `done` is the count behind
+ * us and the step in flight is the one after it.
+ */
+export interface RunProgress {
+  /** Steps finished, whatever their result. */
+  done: number;
+  /** As the runner counts them — a cheap check that we parsed the right line. */
+  total: number;
+  /** 1-based index of the step that printed ✗, if one did. */
+  failedAt: number | null;
+}
+
+const STEP_LINE = /^\s*(\d+)\/(\d+)\s+\S+.*?(✓|✗)/u;
+
+export function progressFromLog(lines: string[]): RunProgress {
+  const out: RunProgress = { done: 0, total: 0, failedAt: null };
+  for (const line of lines) {
+    const m = STEP_LINE.exec(line);
+    if (!m) continue;
+    out.done = Number(m[1]);
+    out.total = Number(m[2]);
+    if (m[3] === '✗') out.failedAt = Number(m[1]);
+  }
+  return out;
+}
+
+/**
+ * Which chunks a run has walked, is walking, and failed in — the shape the
+ * graph needs. Chunks rather than steps because the graph's nodes are chunks:
+ * a plan's step-level detail belongs in the panel, next to the log.
+ */
+export interface RunTrace {
+  /** Every chunk the plan passes through, in order. */
+  path: string[];
+  /** The chunk holding the step currently in flight. */
+  active: string | null;
+  /** Chunks the run has finished with. */
+  done: Set<string>;
+  failed: string | null;
+}
+
+export function traceFor(plan: FlowPlan, progress: RunProgress, finished: boolean): RunTrace {
+  const path = plan.chunks;
+  const steps = plan.steps;
+  const at = Math.min(progress.done, steps.length);
+
+  const failed = progress.failedAt ? steps[progress.failedAt - 1]?.chunk ?? null : null;
+  // The step in flight is the one after the last to report. Once the run is
+  // over there is no such step, and a chunk left looking "active" would read
+  // as still working.
+  const active = finished || failed ? null : steps[at]?.chunk ?? null;
+
+  const done = new Set<string>();
+  for (let i = 0; i < at; i += 1) {
+    const chunk = steps[i].chunk;
+    // A chunk is done once the run has left it, not once it has been entered —
+    // otherwise the chunk in flight shows as both active and finished.
+    if (chunk !== active && chunk !== failed) done.add(chunk);
+  }
+  return { path, active, done, failed };
 }

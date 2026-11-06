@@ -1432,6 +1432,41 @@ button.btn.shot:hover {
 .fg-node.is-downstream .fg-box { stroke: var(--ramp-4); stroke-width: 1.8; stroke-dasharray: 4 3; }
 .fg-node.is-dimmed { opacity: 0.32; }
 
+/*
+   A run, drawn on the tree while it happens.
+
+   The runner reports one step at a time and the panel turns those into chunks,
+   so the map can say the thing a log cannot at a glance: where the run is now,
+   how far it got, and which hop it died on. Four states, deliberately few —
+   ahead of the run, walked, here, and broken.
+
+   The colours are the ones the rest of the dashboard already uses for the same
+   meanings, so nothing new has to be learnt: good for walked, accent for the
+   live one, critical for the failure.
+*/
+.fg-node.is-run-path .fg-box { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 4 3; opacity: 0.9; }
+.fg-node.is-run-done .fg-box { fill: var(--surface-1); stroke: var(--status-good); stroke-width: 2; }
+.fg-node.is-run-failed .fg-box { fill: var(--surface-1); stroke: var(--status-critical); stroke-width: 2.6; }
+.fg-node.is-run-active .fg-box {
+  fill: var(--surface-1); stroke: var(--accent); stroke-width: 2.6;
+  animation: fg-run-pulse 1.3s ease-in-out infinite;
+}
+/* The halo is a second rect so the pulse cannot resize the node itself and
+   shove the layout around a step at a time. */
+.fg-node.is-run-active .fg-portal-bar { animation: fg-run-pulse 1.3s ease-in-out infinite; }
+@keyframes fg-run-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fg-node.is-run-active .fg-box,
+  .fg-node.is-run-active .fg-portal-bar { animation: none; }
+  .fg-node.is-run-active .fg-box { stroke-dasharray: 6 3; }
+}
+
+.fg-edges .is-run-path .fg-edge { stroke: var(--accent); stroke-width: 1.6; opacity: 0.55; stroke-dasharray: 5 4; }
+.fg-edges .is-run-live .fg-edge { stroke: var(--status-good); stroke-width: 2.4; opacity: 1; stroke-dasharray: none; }
+
 .fg-title { font-size: 12.5px; font-weight: 600; fill: var(--text-primary); }
 .fg-id { font-size: 10.5px; fill: var(--text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .fg-meta { font-size: 10.5px; fill: var(--text-secondary); }
@@ -1639,11 +1674,16 @@ button.btn.shot:hover {
 .fm-node-play:hover { color: var(--accent); }
 
 /* Centred, unlike the chunk drawer — it is a decision, not a document. */
-.fm-dialog-run { width: min(760px, 94vw); height: auto; max-height: 88vh; }
+/*
+   The run panel sits on the right like the chunk drawer, but with no scrim:
+   the tree lighting up behind it is the reason the panel is at the edge rather
+   than in the middle, and dimming the thing you are watching defeats that.
+*/
+.fm-drawer-run { width: min(560px, 96vw); }
+.fm-drawer-run::backdrop { background: transparent; backdrop-filter: none; }
 /* The shared panel is sized for the drawer, which fills its dialog. This one is
    as tall as what it has to say, so the footer sits under the content rather
    than at the bottom of an empty box. */
-.fm-dialog-run .fm-dialog-panel { height: auto; max-height: 86vh; }
 
 .fm-run { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .fm-run p { margin: 0; font-size: 13px; }
@@ -1758,6 +1798,19 @@ button.btn.shot:hover {
 /* A step the map marks destructive earns a marker in the margin: it is the one
    thing in a plan worth noticing before pressing run. */
 .fm-run-steps li.is-destructive::before { color: var(--status-critical); font-weight: 700; }
+
+/* The same four states the map shows, against the plan they belong to: the
+   list is where you read what a step was, the map where you see where it is. */
+.fm-run-steps li.is-step-done { opacity: 0.55; }
+.fm-run-steps li.is-step-done::before { content: '✓'; color: var(--success-text); }
+.fm-run-steps li.is-step-live {
+  background: var(--ghost); border-radius: var(--radius-sm);
+  margin: 0 -4px; padding: 1px 4px;
+}
+.fm-run-steps li.is-step-live .fm-run-step-name { font-weight: 700; }
+.fm-run-steps li.is-step-live::before { color: var(--accent); font-weight: 700; }
+.fm-run-steps li.is-step-failed::before { content: '✗'; color: var(--status-critical); font-weight: 700; }
+.fm-run-steps li.is-step-failed .fm-run-step-name { color: var(--status-critical); }
 
 .fm-run-verb { color: var(--text-muted); min-width: 82px; }
 .fm-run-step-name { color: var(--text-primary); }

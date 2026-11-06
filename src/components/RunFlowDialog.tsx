@@ -1,9 +1,15 @@
 /**
  * Running one point on the flow map, and watching it happen.
  *
+ * A drawer down the right edge, not a box in the middle. Centred, it covered
+ * the tree — which is the one thing worth looking at while a run is going,
+ * because the chunks light up as the runner walks them. Against the edge the
+ * map keeps the left of the window and the panel reports the same progress in
+ * words beside it.
+ *
  * A real <dialog> rather than the `modal-*` div pattern the failures table
- * uses: this opens from inside the chunk drawer, which is already a modal
- * dialog in the top layer, and a positioned div would render underneath it.
+ * uses: only showModal() puts an element in the top layer, which is what keeps
+ * the panel above the canvas when the map is in native full screen.
  *
  * The dialog is deliberately slow to commit. Pressing run spends money and
  * writes to staging with real logins, so what will happen is spelled out first
@@ -12,16 +18,20 @@
  * is shown cannot drift from what runs.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   RUN_ENVS,
   fetchPlan,
+  progressFromLog,
   startRun,
+  traceFor,
   watchRun,
   type FlowPlan,
   type PlanStep,
   type RunEnv,
   type RunHandle,
+  type RunProgress,
+  type RunTrace,
 } from '../lib/flowRun';
 import type { AppConfig } from '../types';
 
@@ -80,10 +90,13 @@ export function RunFlowDialog({
   config,
   target,
   onClose,
+  onProgress,
 }: {
   config: AppConfig;
   target: string;
   onClose: () => void;
+  /** Where the run has got to, for the map behind to light up. */
+  onProgress?: (trace: RunTrace | null) => void;
 }) {
   const [plan, setPlan] = useState<FlowPlan | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -129,6 +142,19 @@ export function RunFlowDialog({
 
   const busy = phase.status === 'starting' || phase.status === 'running';
 
+  // The map lights up from the runner's own per-step output. Derived here
+  // rather than in the parent because the plan is what says which chunk a step
+  // belongs to, and the plan is only ever fetched here.
+  const live = busy || phase.status === 'done';
+  const progress = useMemo(() => progressFromLog(log), [log]);
+  useEffect(() => {
+    if (!plan?.runnable || !live) { onProgress?.(null); return; }
+    onProgress?.(traceFor(plan, progress, phase.status === 'done'));
+  }, [plan, live, progress, phase.status, onProgress]);
+
+  // Leaving the panel leaves the tree as it was, not frozen mid-run.
+  useEffect(() => () => onProgress?.(null), [onProgress]);
+
   /** Keep the tail bounded: the DOM is the expensive part, not the memory. */
   const append = (handle: RunHandle) => {
     if (handle.lines?.length) setLog((prev) => [...prev, ...handle.lines!].slice(-1500));
@@ -137,7 +163,6 @@ export function RunFlowDialog({
   async function run() {
     setPhase({ status: 'starting' });
     setLog([]);
-    setShowSteps(false);
     abort.current = new AbortController();
     const { signal } = abort.current;
 
@@ -162,7 +187,7 @@ export function RunFlowDialog({
 
   return (
     <dialog
-      className="fm-dialog fm-dialog-run"
+      className="fm-dialog fm-drawer fm-drawer-run"
       ref={ref}
       onClose={onClose}
       // Closing mid-run would hide a build that is still burning minutes.
@@ -233,7 +258,7 @@ export function RunFlowDialog({
                 {showSteps ? '▾' : '▸'} {plan.steps.length} steps
               </button>
 
-              {showSteps && <StepList steps={plan.steps} values={values} />}
+              {showSteps && <StepList steps={plan.steps} values={values} progress={live ? progress : null} />}
 
               {plan.fields.length > 0 && (
                 <>
@@ -352,19 +377,38 @@ export function RunFlowDialog({
  * for this button is that you can see what it will do, and a collapsed list
  * makes that something you have to go looking for.
  */
-function StepList({ steps, values }: { steps: PlanStep[]; values: Record<string, string> }) {
+function StepList({ steps, values, progress }: {
+  steps: PlanStep[];
+  values: Record<string, string>;
+  /** Null unless a run is on, which is what keeps the list plain beforehand. */
+  progress: RunProgress | null;
+}) {
   return (
     <ol className="fm-run-steps">
       {steps.map((step, i) => {
+        // The runner prints a step's line once it is over, so the one in
+        // flight is the first without a line of its own.
+        const at = progress
+          ? i + 1 === progress.failedAt ? 'is-step-failed'
+            : i < progress.done ? 'is-step-done'
+            // A failure ends the run, so nothing after it is in flight —
+            // without this the step the runner never reached reads as live.
+            : progress.failedAt ? ''
+            : i === progress.done ? 'is-step-live'
+            : ''
+          : '';
         // A credential's value is resolved on the runner and never crosses the
         // wire, but "from the credential fixture" left you unable to tell which
         // of the four accounts a run would sign in as. Naming the role says
         // that much without the password itself ever being here to show.
         const shown = step.secret
-          ? `${step.role ?? 'the'} ${step.control === 'password' ? 'password' : 'username'}, from the fixture`
+          ? `${step.role ?? 'the'} ${step.credField ?? 'credential'}, from the fixture`
           : values[step.node] ?? step.value;
         return (
-          <li key={`${step.node}-${i}`} className={step.destructive ? 'is-destructive' : undefined}>
+          <li
+            key={`${step.node}-${i}`}
+            className={`${step.destructive ? 'is-destructive' : ''} ${at}`.trim() || undefined}
+          >
             <span className="fm-run-verb">{VERB_TEXT[step.verb] ?? step.verb}</span>
             <span className="fm-run-step-name">{step.path ?? step.name}</span>
             {shown !== undefined && (

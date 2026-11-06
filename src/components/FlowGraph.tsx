@@ -10,6 +10,7 @@ import {
   unverifiedWrites,
   type Flow,
 } from '../lib/flow';
+import type { RunTrace } from '../lib/flowRun';
 
 /**
  * The chunk graph, drawn as a tree.
@@ -35,6 +36,12 @@ interface Props {
   flow: Flow;
   selected: string | null;
   onSelect: (id: string) => void;
+  /**
+   * A run in flight, lighting up the chunks it walks. Null when nothing is
+   * running, which is also what keeps the ordinary selection highlighting the
+   * only thing on screen the rest of the time.
+   */
+  trace?: RunTrace | null;
 }
 
 const MIN_SCALE = 0.12;
@@ -109,7 +116,7 @@ function providesLabel(provides: string[], metaText: string): string {
   return `+${provides.length}`;
 }
 
-export function FlowGraph({ flow, selected, onSelect }: Props) {
+export function FlowGraph({ flow, selected, onSelect, trace = null }: Props) {
   const layout = useMemo(() => layoutTree(flow), [flow]);
   const wrap = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -276,8 +283,60 @@ export function FlowGraph({ flow, selected, onSelect }: Props) {
     });
   }, [selected, pos]);
 
+  // Follow a run the same way. A chunk lighting up three screens off is the
+  // same as not lighting up at all, and the run panel takes the right of the
+  // window, so the canvas is the only place left to look. Keyed on the active
+  // chunk rather than on the trace: the trace changes on every poll, and
+  // re-centring every two seconds would fight a reader who has panned away.
+  const active = trace?.active ?? null;
+  useEffect(() => {
+    const box = scroller.current;
+    if (!box || !active) return;
+    const node = pos.get(active);
+    if (!node) return;
+    const z = scaleRef.current;
+    box.scrollTo({
+      left: Math.max(0, (node.x + NODE_W / 2) * z - box.clientWidth / 2),
+      top: Math.max(0, (node.y + NODE_H / 2) * z - box.clientHeight / 2),
+      behavior: 'smooth',
+    });
+  }, [active, pos]);
+
   const dimmed = (id: string) =>
     Boolean(selected) && id !== selected && !upstream.has(id) && !downstream.has(id);
+
+  /**
+   * The chunks a run touches, and the hops between them.
+   *
+   * A plan's chunk chain is a path through the tree, so the pairs of chunks
+   * next to each other in it are the edges to light. They are matched in both
+   * directions: the plan walks a dependency from prerequisite to dependent,
+   * and which way round the arrow is drawn is the layout's business.
+   */
+  const { plannedEdges, walkedEdges } = useMemo(() => {
+    const planned = new Set<string>();
+    const walked = new Set<string>();
+    if (!trace) return { plannedEdges: planned, walkedEdges: walked };
+    for (let i = 1; i < trace.path.length; i += 1) {
+      const a = trace.path[i - 1];
+      const b = trace.path[i];
+      planned.add(`${a}\u0000${b}`).add(`${b}\u0000${a}`);
+      // A hop counts as walked once the run has reached the chunk it leads to.
+      if (trace.done.has(b) || b === trace.active || b === trace.failed) {
+        walked.add(`${a}\u0000${b}`).add(`${b}\u0000${a}`);
+      }
+    }
+    return { plannedEdges: planned, walkedEdges: walked };
+  }, [trace]);
+
+  const runState = (id: string): string => {
+    if (!trace) return '';
+    if (id === trace.failed) return 'is-run-failed';
+    if (id === trace.active) return 'is-run-active';
+    if (trace.done.has(id)) return 'is-run-done';
+    if (trace.path.includes(id)) return 'is-run-path';
+    return '';
+  };
 
   const drawn = showCross ? layout.edges : layout.edges.filter((e) => e.tree);
   const crossCount = layout.edges.filter((e) => !e.tree).length;
@@ -367,18 +426,25 @@ export function FlowGraph({ flow, selected, onSelect }: Props) {
               const y1 = a.y + NODE_H / 2;
               const x2 = b.x;
               const y2 = b.y + NODE_H / 2;
+              const key = `${e.from}\u0000${e.to}`;
+              const walked = walkedEdges.has(key);
+              const planned = plannedEdges.has(key);
               const hot = selected !== null && (e.from === selected || e.to === selected);
-              const faded = Boolean(selected) && !hot;
+              // While a run is on, the run owns the highlighting: an edge that
+              // is not part of the walk recedes even if it touches whatever
+              // happened to be selected when the panel opened.
+              const faded = trace ? !planned : Boolean(selected) && !hot;
               const cls = [
                 e.tree ? 'is-tree' : 'is-cross',
-                hot ? 'is-hot' : faded ? 'is-faded' : '',
+                walked ? 'is-run-live' : planned ? 'is-run-path' : '',
+                hot && !trace ? 'is-hot' : faded ? 'is-faded' : '',
               ].join(' ');
               return (
                 <g key={`${e.from}->${e.to}-${i}`} className={cls}>
                   <path
                     d={e.tree ? elbow(x1, y1, x2, y2) : bow(x1, y1, x2, y2, e.long)}
                     className="fg-edge"
-                    markerEnd={`url(#${hot ? 'fg-arrow-hot' : 'fg-arrow'})`}
+                    markerEnd={`url(#${(trace ? walked : hot) ? 'fg-arrow-hot' : 'fg-arrow'})`}
                   />
                   <title>
                     {`${e.from} → ${e.to}${e.label ? `: ${e.label}` : ''}`
@@ -394,15 +460,20 @@ export function FlowGraph({ flow, selected, onSelect }: Props) {
               const writes = mutatingNodes(n.chunk).length;
               const gaps = unverifiedWrites(n.chunk).length;
               const deps = directDeps(n.chunk).length;
-              const state = n.id === selected
-                ? 'is-selected'
-                : upstream.has(n.id)
-                  ? 'is-upstream'
-                  : downstream.has(n.id)
-                    ? 'is-downstream'
-                    : dimmed(n.id)
-                      ? 'is-dimmed'
-                      : '';
+              // A run in flight replaces the selection highlighting rather than
+              // competing with it: two colour schemes over the same tree at
+              // once is how neither gets read.
+              const state = trace
+                ? runState(n.id) || 'is-dimmed'
+                : n.id === selected
+                  ? 'is-selected'
+                  : upstream.has(n.id)
+                    ? 'is-upstream'
+                    : downstream.has(n.id)
+                      ? 'is-downstream'
+                      : dimmed(n.id)
+                        ? 'is-dimmed'
+                        : '';
               return (
                 <g
                   key={n.id}

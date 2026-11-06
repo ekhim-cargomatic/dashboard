@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlowGraph } from './FlowGraph';
 import { ChunkDialog } from './ChunkDialog';
+import { RunFlowDialog } from './RunFlowDialog';
+import type { RunTrace } from '../lib/flowRun';
 import {
   loadFlow,
   loadFlowIndex,
@@ -104,6 +106,12 @@ export function FlowMap({ config }: { config: AppConfig | null }) {
   const [query, setQuery] = useState('');
   const [onlyGaps, setOnlyGaps] = useState(false);
   const [about, setAbout] = useState(false);
+  // A run lives at this level, not inside the chunk drawer that started it:
+  // its panel takes the same right edge, and the tree it lights up is behind
+  // both. `trace` is whatever the panel last reported — null when idle, which
+  // is what hands the graph's highlighting back to the selection.
+  const [runTarget, setRunTarget] = useState<string | null>(null);
+  const [trace, setTrace] = useState<RunTrace | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -226,6 +234,7 @@ Re-check selectors against the Playwright page objects with
           flow={flow}
           selected={selected}
           onSelect={(id) => setSelected(id === selected ? null : id)}
+          trace={trace}
         />
       </div>
 
@@ -238,6 +247,18 @@ Re-check selectors against the Playwright page objects with
           matches={matches}
           onSelect={setSelected}
           onClose={() => setSelected(null)}
+          // The chunk drawer stands down when a run starts: one right panel at
+          // a time, and the point of the run panel is the map beside it.
+          onRun={(id) => { setRunTarget(id); setSelected(null); }}
+        />
+      )}
+
+      {runTarget && config && (
+        <RunFlowDialog
+          config={config}
+          target={runTarget}
+          onClose={() => { setRunTarget(null); setTrace(null); }}
+          onProgress={setTrace}
         />
       )}
 

@@ -278,6 +278,11 @@ function preview(event, origin) {
       verb: s.verb, name: s.name, node: s.node, chunk: s.chunk, why: s.why,
       ...(s.path ? { path: s.path } : {}),
       ...(s.value !== undefined ? { value: s.value, secret: Boolean(s.secret) } : {}),
+      // Whose account a credential step uses, and which half of it. Metadata,
+      // not the credential: enough for the dialog to say "admin password"
+      // rather than the anonymous "from the fixture", with the value itself
+      // still resolved on the runner and never sent here.
+      ...(s.secret ? { role: s.role, credField: s.credField } : {}),
       ...(s.await ? { await: s.await } : {}),
       ...(s.destructive ? { destructive: true } : {}),
     })),

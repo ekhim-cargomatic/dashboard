@@ -346,8 +346,13 @@ function stepFor(ix, node, why, run, overrides) {
     // is only an email address. These resolve on the runner from the suite's
     // own configs/<env>.yaml, so no credential is ever in the plan, in the
     // dialog, or in the log.
+    // Which half of the login this is. The map marks the password with
+    // `secret`, not with a control type — the username box on these screens is
+    // an ordinary text input — so the control cannot be used to tell them
+    // apart, and reading it from `control` labelled the password "username".
+    const credField = node.secret ? 'password' : 'username';
     const synthesized = credential
-      ? { value: `{{cred:${portal}.${node.secret ? 'password' : 'username'}}}`, secret: true, role: portal }
+      ? { value: `{{cred:${portal}.${credField}}}`, secret: true, role: portal, credField }
       : synthesize(node, run);
     const given = Object.prototype.hasOwnProperty.call(overrides, node.id) ? overrides[node.id] : null;
     return {
