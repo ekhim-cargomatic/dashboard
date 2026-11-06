@@ -34,6 +34,9 @@ export interface PlanStep {
   value?: string;
   /** A credential, resolved on the runner. Shown, never sent, never editable. */
   secret?: boolean;
+  /** Whose account a sign-in credential belongs to — never the value itself. */
+  role?: string;
+  control?: string;
   await?: { method: string; path: string };
   destructive?: boolean;
 }

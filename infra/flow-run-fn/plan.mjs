@@ -202,10 +202,13 @@ const today = () => new Date().toISOString().slice(0, 10);
  * not decisions: the dialog shows every one of them before anything runs.
  */
 export function synthesize(node, run) {
-  // A secret outside a sign-in screen is a password being set on an account
-  // the run is creating. It still comes from the fixture, because the suite
-  // registers accounts with the password it will later sign in as.
-  if (node.secret) return { value: '{{cred:default.password}}', secret: true };
+  // A password outside a sign-in screen is not a credential being used, it is
+  // a value being *set* on an account this run creates. There is nothing to
+  // protect, so treating it as a secret only meant the one value that decides
+  // whether the new account can be signed into was the one value you could
+  // neither see nor change. `admin` is what these accounts are given by
+  // default; it is an ordinary editable field like any other.
+  if (node.secret) return { value: 'admin' };
   if (Array.isArray(node.enum) && node.enum.length > 0) return { value: String(node.enum[0]) };
 
   const name = String(node.name ?? '').toLowerCase();
@@ -344,7 +347,7 @@ function stepFor(ix, node, why, run, overrides) {
     // own configs/<env>.yaml, so no credential is ever in the plan, in the
     // dialog, or in the log.
     const synthesized = credential
-      ? { value: `{{cred:${portal}.${node.secret ? 'password' : 'username'}}}`, secret: true }
+      ? { value: `{{cred:${portal}.${node.secret ? 'password' : 'username'}}}`, secret: true, role: portal }
       : synthesize(node, run);
     const given = Object.prototype.hasOwnProperty.call(overrides, node.id) ? overrides[node.id] : null;
     return {

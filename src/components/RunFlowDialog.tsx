@@ -356,8 +356,12 @@ function StepList({ steps, values }: { steps: PlanStep[]; values: Record<string,
   return (
     <ol className="fm-run-steps">
       {steps.map((step, i) => {
+        // A credential's value is resolved on the runner and never crosses the
+        // wire, but "from the credential fixture" left you unable to tell which
+        // of the four accounts a run would sign in as. Naming the role says
+        // that much without the password itself ever being here to show.
         const shown = step.secret
-          ? 'from the credential fixture'
+          ? `${step.role ?? 'the'} ${step.control === 'password' ? 'password' : 'username'}, from the fixture`
           : values[step.node] ?? step.value;
         return (
           <li key={`${step.node}-${i}`} className={step.destructive ? 'is-destructive' : undefined}>
