@@ -47,8 +47,12 @@ export interface RunRef {
 const joinUrl = (base: string, path: string) =>
   base ? `${base.replace(/\/$/, '')}/${path.replace(/^\//, '')}` : `/${path.replace(/^\//, '')}`;
 
-/** Mirror folders that duplicate a real run and must not be listed as runs. */
-const MIRROR_FOLDERS = new Set(['latest', 'current']);
+/**
+ * Folders under the runs prefix that are not runs: `latest` and `current`
+ * mirror a real run, and `live` is the frame a flow run streams while it is
+ * still going, which has no report in it and never will.
+ */
+const MIRROR_FOLDERS = new Set(['latest', 'current', 'live']);
 
 // --------------------------------------------------------------------------- //
 // Listing

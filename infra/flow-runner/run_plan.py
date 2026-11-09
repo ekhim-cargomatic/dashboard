@@ -24,10 +24,12 @@ second kind of result nothing else understands.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -161,6 +163,113 @@ def fill_credentials(value: str, config: dict) -> str:
 
 
 # ────────────────────────────────────────────────────────────── gestures ──
+
+class LiveView:
+    """
+    The browser, pushed out of the container while the run is happening.
+
+    A CodeBuild container has no inbound network path -- no public IP, nothing
+    listening -- so nothing can connect *to* Chromium the way a local debugger
+    would. The frames have to go the other way, and the only pipe that already
+    exists is the bucket the report is published to.
+
+    Chromium's own screencast produces them: the compositor hands over a JPEG
+    on each repaint, which costs the run far less than calling screenshot() on
+    a timer would, and gives frames at the moments something actually changed
+    rather than on a clock that knows nothing about the page.
+
+    Two threads, deliberately. Frames are acked on Playwright's event thread --
+    the ack is the flow control, and without it Chromium sends one frame and
+    stops -- while the upload happens on another, because an S3 PUT inside the
+    frame handler would stall the browser between repaints. Only ever the
+    newest frame is uploaded: a viewer wants to see now, not a backlog, so
+    dropping the ones in between is the correct behaviour rather than a
+    shortcut.
+
+    Entirely best-effort. Every failure here is swallowed, because a run that
+    works is worth more than a run you can watch.
+    """
+
+    def __init__(self, bucket: str, key: str, fps: float = 3.0):
+        self.bucket, self.key = bucket, key
+        self.gap = 1.0 / fps
+        self._latest: bytes | None = None
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._cdp = None
+        self._s3 = None
+        self.sent = self.dropped = 0
+
+    def start(self, context, page) -> bool:
+        try:
+            import boto3
+            self._s3 = boto3.client("s3")
+            self._cdp = context.new_cdp_session(page)
+            self._cdp.on("Page.screencastFrame", self._on_frame)
+            self._cdp.send("Page.startScreencast", {
+                "format": "jpeg", "quality": 55,
+                # Narrower than the 1600px viewport: the panel shows this a few
+                # hundred pixels wide, and a full-width frame is four times the
+                # bytes for detail nothing renders.
+                "maxWidth": 1200, "maxHeight": 750, "everyNthFrame": 1,
+            })
+        except Exception as err:
+            log(f"live view unavailable ({type(err).__name__}: {err}) — the run is unaffected")
+            return False
+        self._thread = threading.Thread(target=self._upload_loop, daemon=True)
+        self._thread.start()
+        return True
+
+    def _on_frame(self, event: dict) -> None:
+        try:
+            frame = base64.b64decode(event["data"])
+        except Exception:
+            return
+        with self._lock:
+            if self._latest is not None:
+                self.dropped += 1
+            self._latest = frame
+        try:
+            self._cdp.send("Page.screencastFrameAck", {"sessionId": event["sessionId"]})
+        except Exception:
+            pass
+
+    def _upload_loop(self) -> None:
+        while not self._stop.is_set():
+            self._stop.wait(self.gap)
+            self._flush()
+
+    def _flush(self) -> None:
+        with self._lock:
+            frame, self._latest = self._latest, None
+        if frame is None:
+            return
+        try:
+            self._s3.put_object(
+                Bucket=self.bucket, Key=self.key, Body=frame,
+                ContentType="image/jpeg",
+                # The panel re-reads this one key for the whole run, so a cached
+                # copy anywhere between here and the browser freezes the view.
+                CacheControl="no-store, max-age=0",
+            )
+            self.sent += 1
+        except Exception:
+            pass
+
+    def stop(self) -> None:
+        if self._cdp is not None:
+            try:
+                self._cdp.send("Page.stopScreencast")
+            except Exception:
+                pass
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=3)
+        # One last push, so the view ends on what the browser actually last
+        # showed rather than on whatever happened to be mid-interval.
+        self._flush()
+
 
 class StepFailed(Exception):
     def __init__(self, message: str, screenshot: str | None = None):
@@ -379,6 +488,8 @@ def main() -> int:
     parser.add_argument("--results", default="reports/allure-results")
     parser.add_argument("--screenshots", default="reports/screenshots")
     parser.add_argument("--headless", default="true")
+    parser.add_argument("--live-bucket", default="", help="bucket to stream frames to")
+    parser.add_argument("--live-key", default="", help="object the newest frame overwrites")
     args = parser.parse_args()
 
     plan = json.loads(Path(args.plan).read_text())
@@ -402,6 +513,16 @@ def main() -> int:
         context = browser.new_context(viewport={"width": 1600, "height": 1000})
         context.set_default_timeout(DEFAULT_TIMEOUT_MS)
         page = context.new_page()
+
+        # Started before the first step so the panel has something to show
+        # while the plan is still on its way to /login.
+        live = None
+        if args.live_bucket and args.live_key:
+            live = LiveView(args.live_bucket, args.live_key)
+            if live.start(context, page):
+                log(f"live view: s3://{args.live_bucket}/{args.live_key}")
+            else:
+                live = None
 
         variables: dict[str, str] = {}
         for i, step in enumerate(plan["steps"], start=1):
@@ -454,6 +575,10 @@ def main() -> int:
                     "start": started, "stop": int(time.time() * 1000),
                 })
                 break
+
+        if live is not None:
+            live.stop()
+            log(f"live view: {live.sent} frames sent, {live.dropped} superseded")
 
         context.close()
         browser.close()

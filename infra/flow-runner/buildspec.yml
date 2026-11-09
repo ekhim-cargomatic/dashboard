@@ -54,6 +54,10 @@ phases:
       - aws s3 cp "s3://${FLOW_PLAN_BUCKET}/${FLOW_PLAN_KEY}" plan.json --only-show-errors
       - aws s3 cp "s3://${FLOW_PLAN_BUCKET}/flow/run_plan.py" run_plan.py --only-show-errors
       - pip install --quiet --no-cache-dir -r requirements.txt
+      # The live view uploads frames from inside the run. The AWS CLI in this
+      # image is the v2 bundle with its own private Python, so it cannot be
+      # imported -- boto3 is a separate, small install.
+      - pip install --quiet --no-cache-dir boto3
       # A no-op when requirements pins the version the image baked; a real
       # download when it has moved on. Cheaper than being wrong.
       - playwright install chromium
@@ -69,7 +73,11 @@ phases:
       #
       # No `set +e` guard either — run_plan.py exits 0 whatever the browser
       # finds, because a failing step is a result and not a broken build.
-      - python run_plan.py --plan plan.json --repo . --env "$FLOW_ENV" --results reports/allure-results --screenshots reports/screenshots
+      # The build id is "project:uuid"; the uuid alone is the unguessable part
+      # and makes a path, which the colon does not.
+      - export LIVE_KEY="runs/live/${CODEBUILD_BUILD_ID##*:}/frame.jpg"
+      - echo "live view at ${LIVE_KEY}"
+      - python run_plan.py --plan plan.json --repo . --env "$FLOW_ENV" --results reports/allure-results --screenshots reports/screenshots --live-bucket "$DASHBOARD_BUCKET" --live-key "$LIVE_KEY"
 
   post_build:
     commands:

@@ -282,3 +282,19 @@ export function traceFor(plan: FlowPlan, progress: RunProgress, finished: boolea
   }
   return { path, active, done, failed };
 }
+
+/**
+ * Where the runner is pushing the browser, for a build this session started.
+ *
+ * A CodeBuild container has no inbound network, so the live view is not a
+ * connection to the browser — it is one S3 object the runner overwrites a few
+ * times a second, read straight from the bucket the dashboard already reads.
+ * The build id's uuid half is the path, which is what keeps one run's frames
+ * from being guessable from another's.
+ */
+export function liveFrameUrl(config: AppConfig, buildId: string): string | null {
+  const id = buildId.split(':').pop();
+  if (!id || !/^[0-9a-f-]{16,}$/i.test(id)) return null;
+  const base = (config.dataBaseUrl ?? '').replace(/\/$/, '');
+  return `${base}/runs/live/${id}/frame.jpg`;
+}

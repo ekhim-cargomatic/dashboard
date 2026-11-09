@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   RUN_ENVS,
   fetchPlan,
+  liveFrameUrl,
   progressFromLog,
   startRun,
   traceFor,
@@ -155,6 +156,10 @@ export function RunFlowDialog({
   // Leaving the panel leaves the tree as it was, not frozen mid-run.
   useEffect(() => () => onProgress?.(null), [onProgress]);
 
+  const liveUrl = phase.status === 'running' || phase.status === 'done'
+    ? liveFrameUrl(config, phase.handle.buildId)
+    : null;
+
   /** Keep the tail bounded: the DOM is the expensive part, not the memory. */
   const append = (handle: RunHandle) => {
     if (handle.lines?.length) setLog((prev) => [...prev, ...handle.lines!].slice(-1500));
@@ -248,6 +253,10 @@ export function RunFlowDialog({
                   </span>
                 ))}
               </p>
+
+              {liveUrl && live && (
+                <LiveFrame url={liveUrl} polling={busy} />
+              )}
 
               <button
                 type="button"
@@ -367,6 +376,60 @@ export function RunFlowDialog({
         )}
       </div>
     </dialog>
+  );
+}
+
+/**
+ * The browser itself, while the run is happening.
+ *
+ * Not a stream and not a connection: the runner overwrites one object in the
+ * bucket a few times a second and this re-reads it, because a CodeBuild
+ * container has nothing listening for a viewer to connect to.
+ *
+ * The newest frame is loaded off-screen and swapped in only once it has
+ * decoded. Pointing the <img> straight at a new URL blanks it while the next
+ * one downloads, which at three frames a second is a strobe rather than a
+ * picture.
+ */
+function LiveFrame({ url, polling }: { url: string; polling: boolean }) {
+  const [shown, setShown] = useState<string | null>(null);
+  const [missing, setMissing] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    let timer: number | undefined;
+
+    const pull = () => {
+      const next = `${url}?t=${Date.now()}`;
+      const img = new Image();
+      img.onload = () => {
+        if (!alive) return;
+        setShown(next);
+        setMissing(false);
+        if (polling) timer = window.setTimeout(pull, 400);
+      };
+      // Before the first frame lands the object does not exist yet, which is a
+      // 404 and not a problem — try again rather than reporting anything.
+      img.onerror = () => {
+        if (!alive) return;
+        setMissing(true);
+        if (polling) timer = window.setTimeout(pull, 1200);
+      };
+      img.src = next;
+    };
+
+    pull();
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [url, polling]);
+
+  return (
+    <figure className="fm-run-screen">
+      {shown
+        ? <img src={shown} alt="The browser running the plan" />
+        : <span className="fm-run-screen-wait">
+            {missing ? 'waiting for the browser to start…' : 'connecting…'}
+          </span>}
+    </figure>
   );
 }
 

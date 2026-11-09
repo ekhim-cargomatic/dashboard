@@ -1799,6 +1799,22 @@ button.btn.shot:hover {
    thing in a plan worth noticing before pressing run. */
 .fm-run-steps li.is-destructive::before { color: var(--status-critical); font-weight: 700; }
 
+/*
+   The browser, mid-run. Sized by aspect ratio rather than height so the box is
+   the same shape as the frames arriving into it and nothing jumps when the
+   first one lands.
+*/
+.fm-run-screen {
+  margin: 0; padding: 0; overflow: hidden;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  aspect-ratio: 1200 / 750;
+  display: flex; align-items: center; justify-content: center;
+  flex: none;
+}
+.fm-run-screen img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.fm-run-screen-wait { font-size: 12px; color: var(--text-muted); }
+
 /* The same four states the map shows, against the plan they belong to: the
    list is where you read what a step was, the map where you see where it is. */
 .fm-run-steps li.is-step-done { opacity: 0.55; }
