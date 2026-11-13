@@ -6507,13 +6507,13 @@
      "name": "Customer",
      "control": "combobox",
      "required": true,
-     "selector": "input[placeholder=\"Search for customers...\"][role=\"combobox\"]",
-     "source": "BookingPage.SHIPPER_INPUT",
+     "selector": "div.lg\\:col-span-8 input[placeholder=\"Search for customers...\"][role=\"combobox\"]:not(#customer-search-admin)",
+     "source": "BookingPage.LEFT_ROOT + BookingPage.SHIPPER_INPUT",
      "then": [
       {
        "action": "pickSuggestion",
-       "selector": "input[placeholder=\"Search for customers...\"][role=\"combobox\"] + div a",
-       "source": "BookingPage.SHIPPER_INPUT_SUGGESTION_ITEM"
+       "selector": "div.lg\\:col-span-8 [data-testid=\"customer-search\"] a[role=\"menuitem\"], div.lg\\:col-span-8 input[placeholder=\"Search for customers...\"][role=\"combobox\"]:not(#customer-search-admin) + div a",
+       "source": "BookingPage.LEFT_ROOT + BookingPage.SHIPPER_INPUT_SUGGESTION_ITEM"
       }
      ],
      "api": {
@@ -6527,7 +6527,7 @@
        "confidence": "route-table"
       }
      },
-     "note": "Different control from the drayage modal's #order-shipper-search \u2014 same job, separate implementation."
+     "note": "Scoped to the left column. Unscoped, the placeholder also matches the nav bar's CustomerSearch (#customer-search-admin, nav.js), which navigates away to the shipper profile."
     },
     {
      "id": "sh.type.shorthaul",
