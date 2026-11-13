@@ -141,8 +141,59 @@ const isPrefix = (short, long) =>
  * filling in the modal the assertion itself is not inside. A sibling branch is
  * neither, which is what keeps the shipper form out of the carrier form's plan.
  */
-const onSameBranch = (nodeChain, targetChain) =>
-  isPrefix(nodeChain, targetChain) || isPrefix(targetChain, nodeChain);
+/** A section you must click through: a wizard step with its own Next button. */
+const ADVANCE = /^(next|continue)$/i;
+
+const GO_BACK = /^(previous|prev|back)\b/i;
+
+function advanceActionOf(ix, sectionId) {
+  const sec = ix.nodes.get(sectionId);
+  if (!sec || sec.kind !== 'section') return null;
+  const chunk = ix.chunks.get(ix.chunkOf.get(sectionId));
+  const own = (chunk?.nodes ?? []).filter((n) => n.parent === sectionId && n.kind === 'action');
+  // Pagination also has a Next, and clicking it would page a table rather than
+  // advance a form. It is always paired with a Previous; a wizard step is one
+  // way out.
+  if (own.some((n) => GO_BACK.test(n.name ?? ''))) return null;
+  return own.find((n) => ADVANCE.test(n.name ?? '')) ?? null;
+}
+
+const divergeAt = (a, b) => {
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i += 1) if (a[i] !== b[i]) return i;
+  return -1;
+};
+
+/** The section, if any, that the target sits inside. */
+const sectionOf = (ix, chainIds) =>
+  chainIds.find((id) => ix.nodes.get(id)?.kind === 'section') ?? null;
+
+const onSameBranch = (ix, nodeChain, targetChain) => {
+  if (isPrefix(nodeChain, targetChain) || isPrefix(targetChain, nodeChain)) return true;
+
+  // The chains split, and whether that makes them alternatives depends on what
+  // they split at.
+  //
+  // A booking wizard's numbered steps are sections of one page, each ending in
+  // a Next: reaching "5 — Review & book" means having worked through 1 to 4.
+  // Calling those sibling branches is what reduced the booking plan to "go to
+  // /booking" then "click Book" — every field on the way sits in a section the
+  // Book button does not.
+  //
+  // Independent cards on a details page are siblings too, but nothing gates
+  // them, so pulling one card's writes into another card's plan would be an
+  // invention. The Next button is the difference, and the map already records
+  // it.
+  const i = divergeAt(nodeChain, targetChain);
+  if (i < 0) return true;
+  const theirs = ix.nodes.get(nodeChain[i]);
+  const ours = ix.nodes.get(targetChain[i]);
+  if (!theirs || !ours) return false;
+  if (theirs.kind !== 'section' || ours.kind !== 'section') return false;
+  if (theirs.parent !== ours.parent) return false;
+  if (!advanceActionOf(ix, theirs.id)) return false;
+  return ix.order.get(theirs.id) < ix.order.get(ours.id);
+};
 
 /**
  * The selector to drive a node with.
@@ -431,7 +482,7 @@ function stepsWithin(ix, chunkId, targetId, run, overrides, isTarget = true) {
     if (ix.order.get(node.id) >= targetOrder) break;
     if (node.kind === 'page') continue;
     if (ix.order.get(node.id) < entryOrder && !inChain.has(node.id)) continue;
-    if (!onSameBranch(containerChain(ix, node.id), chain) && !inChain.has(node.id)) continue;
+    if (!onSameBranch(ix, containerChain(ix, node.id), chain) && !inChain.has(node.id)) continue;
 
     if (inChain.has(node.id)) {
       // Containers themselves need no gesture; the button that opens one does.
@@ -463,6 +514,22 @@ function stepsWithin(ix, chunkId, targetId, run, overrides, isTarget = true) {
       if (skippedOptional && node.parent === ix.nodes.get(skippedOptional)?.parent) continue;
       if (node.destructive || node.template || node.scopedToRow || node.repeatable) continue;
       if (DISMISS.test(node.name ?? '')) continue;
+
+      // A wizard's Next is not optional furniture: the following section is
+      // not reachable, and often not even rendered, until it is clicked. The
+      // plan filled the fields of steps 1-4 and then tried to press Book
+      // without ever advancing past step 1.
+      if (ADVANCE.test(node.name ?? '') && advanceActionOf(ix, node.parent)) {
+        const ourSection = sectionOf(ix, chain);
+        const passingThrough = !ourSection
+          || (ix.nodes.get(node.parent)?.parent === ix.nodes.get(ourSection)?.parent
+              && ix.order.get(node.parent) < ix.order.get(ourSection));
+        if (passingThrough) {
+          blockers.push(...nodeBlockers(ix, node));
+          steps.push(stepFor(ix, node, 'advances the form to the next step', run, overrides));
+          continue;
+        }
+      }
 
       // A button standing between us and a field we have to fill is part of
       // getting to that field, not a step of its own: "Add equipment row" is
