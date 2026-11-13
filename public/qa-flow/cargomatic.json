@@ -6625,7 +6625,9 @@
        "selector": "ul[role=\"listbox\"]",
        "source": "BookingPage.EQUIPMENT_MULTISELECT_LISTBOX"
       }
-     ]
+     ],
+     "required": true,
+     "note": "Load Details will not advance without an equipment type."
     },
     {
      "id": "sh.fullTruckload",
@@ -6655,7 +6657,9 @@
      "control": "number",
      "scopedToRow": true,
      "selector": "table:has(input[placeholder=\"Quantity\"]) tbody tr input[placeholder=\"Weight\"]",
-     "source": "BookingPage.WEIGHT_INPUT_0"
+     "source": "BookingPage.WEIGHT_INPUT_0",
+     "required": true,
+     "note": "Staging rejects Book with \"Please provide the shipment weight\" / \"Load 1: Please set the weight\"."
     },
     {
      "id": "sh.load.length",
@@ -6666,6 +6670,56 @@
      "scopedToRow": true,
      "selector": "table:has(input[placeholder=\"Quantity\"]) tbody tr input[placeholder=\"Length\"]",
      "source": "BookingPage.LENGTH_INPUT_0"
+    },
+    {
+     "id": "sh.load.type",
+     "kind": "field",
+     "parent": "sh.step.load",
+     "name": "Load type",
+     "control": "select",
+     "scopedToRow": true,
+     "selector": ":nth-match(table:has(input[placeholder=\"Quantity\"]) tbody tr select[data-testid=\"dropdown\"], 1)",
+     "source": "BookingPage.TYPE_SELECT_0"
+    },
+    {
+     "id": "sh.load.width",
+     "kind": "field",
+     "parent": "sh.step.load",
+     "name": "Width",
+     "control": "number",
+     "scopedToRow": true,
+     "selector": "table:has(input[placeholder=\"Quantity\"]) tbody tr input[placeholder=\"Width\"]",
+     "source": "BookingPage.WIDTH_INPUT_0"
+    },
+    {
+     "id": "sh.load.height",
+     "kind": "field",
+     "parent": "sh.step.load",
+     "name": "Height",
+     "control": "number",
+     "scopedToRow": true,
+     "selector": "table:has(input[placeholder=\"Quantity\"]) tbody tr input[placeholder=\"Height\"]",
+     "source": "BookingPage.HEIGHT_INPUT_0"
+    },
+    {
+     "id": "sh.load.dimUnit",
+     "kind": "field",
+     "parent": "sh.step.load",
+     "name": "Dimensional unit",
+     "control": "select",
+     "scopedToRow": true,
+     "selector": ":nth-match(table:has(input[placeholder=\"Quantity\"]) tbody tr select[data-testid=\"dropdown\"], 2)",
+     "source": "BookingPage.DIM_UNIT_SELECT_0"
+    },
+    {
+     "id": "sh.load.weightUnit",
+     "kind": "field",
+     "parent": "sh.step.load",
+     "name": "Weight unit",
+     "control": "select",
+     "scopedToRow": true,
+     "selector": ":nth-match(table:has(input[placeholder=\"Quantity\"]) tbody tr select[data-testid=\"dropdown\"], 3)",
+     "source": "BookingPage.WEIGHT_UNIT_SELECT_0"
     },
     {
      "id": "sh.load.stackable",
@@ -6684,7 +6738,9 @@
      "name": "Add load line",
      "action": "click",
      "selector": "header:has(h3:has-text(\"Load\")) button[aria-label=\"add\"]",
-     "source": "BookingPage.ADD_LOAD_ROW"
+     "source": "BookingPage.ADD_LOAD_ROW",
+     "repeatable": true,
+     "note": "Adds a SECOND load row. Walking through it on the way to the reference numbers leaves an empty Load 2 that fails validation at Book."
     },
     {
      "id": "sh.ref.tracking",
@@ -6693,7 +6749,9 @@
      "name": "Tracking ID",
      "control": "text",
      "selector": "input[placeholder=\"Tracking ID\"]",
-     "source": "BookingPage.TRACKING_ID_INPUT"
+     "source": "BookingPage.TRACKING_ID_INPUT",
+     "required": true,
+     "note": "Staging rejects Book with \"Please provide a shipper reference number\"."
     },
     {
      "id": "sh.ref.mo",
@@ -10910,23 +10968,42 @@
     "@ui"
    ],
    "sourceFile": "pages/shipperPortal/*.py",
-   "entry": "sp.book.dispatch",
+   "entry": "sp.book.page",
    "exit": "sp.acc.submit",
    "note": "The customer's own view. The booking wizard mirrors the admin shorthaul one step for step but is a separate implementation, so a fix in one does not fix the other.",
    "nodes": [
+    {
+     "id": "sp.book.page",
+     "kind": "page",
+     "name": "Shipper booking",
+     "path": "/booking",
+     "pathSource": "ShipperBookingPage.SHIPPER_BOOKING_URL_PATH"
+    },
     {
      "id": "sp.book.dispatch",
      "kind": "section",
      "name": "1 \u2014 Dispatch",
      "selector": "h3:has-text(\"Dispatch Details\")",
-     "source": "ShipperBookingPage.DISPATCH_HEADER"
+     "source": "ShipperBookingPage.DISPATCH_HEADER",
+     "parent": "sp.book.page"
+    },
+    {
+     "id": "sp.book.dispatch.next",
+     "kind": "action",
+     "parent": "sp.book.dispatch",
+     "name": "Next",
+     "action": "click",
+     "selector": "button.button.button-green:has(span:text-is(\"Next\"))",
+     "source": "ShipperBookingPage.NEXT_BUTTON",
+     "note": "The wizard does not render the next section until this is clicked."
     },
     {
      "id": "sp.book.load",
      "kind": "section",
      "name": "2 \u2014 Load details",
      "selector": "div[data-testid=\"div-adc341f9\"] h3:has-text(\"Load Details\")",
-     "source": "ShipperBookingPage.STEP_LOAD_DETAILS_HEADER"
+     "source": "ShipperBookingPage.STEP_LOAD_DETAILS_HEADER",
+     "parent": "sp.book.page"
     },
     {
      "id": "sp.book.ftl",
@@ -10965,7 +11042,9 @@
      "control": "number",
      "scopedToRow": true,
      "selector": "table.default-table tbody tr:nth-of-type(1) input[placeholder='Weight']",
-     "source": "ShipperBookingPage.ROW_WEIGHT_INPUT"
+     "source": "ShipperBookingPage.ROW_WEIGHT_INPUT",
+     "required": true,
+     "note": "Book is rejected without it \u2014 same validation as the admin booking page."
     },
     {
      "id": "sp.book.stackable",
@@ -10984,7 +11063,9 @@
      "name": "Add load line",
      "action": "click",
      "selector": "button[data-testid=\"circleButton\"]",
-     "source": "ShipperBookingPage.ADD_LOAD_BUTTON"
+     "source": "ShipperBookingPage.ADD_LOAD_BUTTON",
+     "repeatable": true,
+     "note": "Adds a SECOND load row; walking through it leaves an empty row that fails validation at Book."
     },
     {
      "id": "sp.book.tracking",
@@ -10993,7 +11074,9 @@
      "name": "Tracking ID",
      "control": "text",
      "selector": "[data-testid=\"TextField-81d9c91b\"][placeholder=\"Tracking ID\"]",
-     "source": "ShipperBookingPage.TRACKING_ID_INPUT"
+     "source": "ShipperBookingPage.TRACKING_ID_INPUT",
+     "required": true,
+     "note": "Book is rejected with \"Please provide a shipper reference number\"."
     },
     {
      "id": "sp.book.doUpload",
@@ -11027,18 +11110,40 @@
      }
     },
     {
+     "id": "sp.book.load.next",
+     "kind": "action",
+     "parent": "sp.book.load",
+     "name": "Next",
+     "action": "click",
+     "selector": "button.button.button-green:has(span:text-is(\"Next\"))",
+     "source": "ShipperBookingPage.NEXT_BUTTON",
+     "note": "The wizard does not render the next section until this is clicked."
+    },
+    {
      "id": "sp.book.acc",
      "kind": "section",
      "name": "3 \u2014 Accessorials",
      "selector": "h3:has-text(\"Accessorials\")",
-     "source": "ShipperBookingPage.ACCESSORIALS_HEADER"
+     "source": "ShipperBookingPage.ACCESSORIALS_HEADER",
+     "parent": "sp.book.page"
+    },
+    {
+     "id": "sp.book.acc.next",
+     "kind": "action",
+     "parent": "sp.book.acc",
+     "name": "Next",
+     "action": "click",
+     "selector": "button.button.button-green:has(span:text-is(\"Next\"))",
+     "source": "ShipperBookingPage.NEXT_BUTTON",
+     "note": "The wizard does not render the next section until this is clicked."
     },
     {
      "id": "sp.book.route",
      "kind": "section",
      "name": "4 \u2014 Route details",
      "selector": "h3:has-text(\"Route Details\")",
-     "source": "ShipperBookingPage.STEP_ROUTE_DETAILS_HEADER"
+     "source": "ShipperBookingPage.STEP_ROUTE_DETAILS_HEADER",
+     "parent": "sp.book.page"
     },
     {
      "id": "sp.book.tz",
@@ -11119,11 +11224,22 @@
      "source": "ShipperBookingPage.SHIPMENT_NOTES"
     },
     {
+     "id": "sp.book.route.next",
+     "kind": "action",
+     "parent": "sp.book.route",
+     "name": "Next",
+     "action": "click",
+     "selector": "button.button.button-green:has(span:text-is(\"Next\"))",
+     "source": "ShipperBookingPage.NEXT_BUTTON",
+     "note": "The wizard does not render the next section until this is clicked."
+    },
+    {
      "id": "sp.book.review",
      "kind": "section",
      "name": "5 \u2014 Review & book",
      "selector": "h3:has-text(\"Review & Book\")",
-     "source": "ShipperBookingPage.STEP_REVIEW_AND_BOOK_HEADER"
+     "source": "ShipperBookingPage.STEP_REVIEW_AND_BOOK_HEADER",
+     "parent": "sp.book.page"
     },
     {
      "id": "sp.book.price",
