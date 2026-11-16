@@ -260,7 +260,17 @@ export function synthesize(node, run) {
   // neither see nor change. `admin` is what these accounts are given by
   // default; it is an ordinary editable field like any other.
   if (node.secret) return { value: 'admin' };
+  // A typeahead that searches RECORDS needs a value that matches one. `sample`
+  // is that value, taken from what the suite itself books with, so the list
+  // actually opens. An enum would be the wrong word for it: these are not the
+  // allowed values, just one that is known to exist.
+  if (node.sample) return { value: String(node.sample) };
   if (Array.isArray(node.enum) && node.enum.length > 0) return { value: String(node.enum[0]) };
+  // A fixed-option control whose labels the map does not know. Typing anything
+  // filters the list to nothing — `QA` matched no equipment type and the step
+  // failed as if its selector were wrong. Type nothing and take the first
+  // option, which is the only choice that is right on every environment.
+  if (node.fromList) return { value: '', byIndex: 0 };
 
   const name = String(node.name ?? '').toLowerCase();
   const control = node.control ?? 'text';

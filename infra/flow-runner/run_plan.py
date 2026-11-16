@@ -395,7 +395,14 @@ def perform(page, step: dict, config: dict, variables: dict) -> str:
     if verb == "pickOption":
         ready(target)
         target.click()
-        if value:
+        # The trigger for a multiselect is often a <button> that opens a popover
+        # with its own search box. fill() on a button throws, which read as "the
+        # selector is wrong" when the selector was right — the value simply does
+        # not belong on that element. Where there is no fillable target, the
+        # value is carried by a `type` follow, or the option is clicked by name.
+        if value and target.evaluate(
+            "el => el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable"
+        ):
             target.fill(value)
         # A typeahead fires per keystroke; the list is not the list until it settles.
         page.wait_for_timeout(step.get("settleMs") or 1200)

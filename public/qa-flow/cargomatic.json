@@ -471,7 +471,9 @@
        "selector": "#downshift-0-menu [role=\"option\"]",
        "source": "OrderBookingPage.RAILROADS_SELECTED_ITEMS"
       }
-     ]
+     ],
+     "fromList": true,
+     "note": "railroads is a free-form [String] in order.js \u2014 no schema enum to draw labels from, so the first option the environment offers is taken."
     },
     {
      "id": "order.create.eta",
@@ -530,7 +532,9 @@
        "confidence": "client"
       },
       "note": "Same endpoint the location-autosuggest component calls (apps/admin-client-legacy/src/main/js/components/site/location-autosuggest.js)."
-     }
+     },
+     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
+     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
     },
     {
      "id": "order.create.origin.name",
@@ -580,7 +584,9 @@
        "selector": "#order-destination-details [role=\"option\"], #order-destination-details [class=\"list-group-item\"]",
        "source": "OrderBookingPage.DEST_ADDRESS_INPUT_SUGGESTION_ITEM"
       }
-     ]
+     ],
+     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
+     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
     },
     {
      "id": "order.create.dest.name",
@@ -1548,7 +1554,8 @@
      "name": "Status filter",
      "control": "combobox",
      "selector": "button[role='combobox']",
-     "source": "OrderBillingPage.SEL_AMC_FILTER_DROPDOWN"
+     "source": "OrderBillingPage.SEL_AMC_FILTER_DROPDOWN",
+     "fromList": true
     },
     {
      "id": "amc.table",
@@ -1833,7 +1840,8 @@
        "selector": "[data-radix-popper-content-wrapper] div[role='listbox'] div[role='option']",
        "sourceComposed": "OrderBillingPage.SEL_OVERRIDE_OPTION"
       }
-     ]
+     ],
+     "fromList": true
     },
     {
      "id": "billing.override.reason",
@@ -1926,7 +1934,8 @@
        "selector": "div[role='listbox'] div[role='option']",
        "sourceComposed": "OrderBillingPage.SEL_ADD_BASE_COST_OPTION"
       }
-     ]
+     ],
+     "fromList": true
     },
     {
      "id": "billing.baseCost.amount",
@@ -4023,7 +4032,8 @@
      "name": "Override enabled events",
      "control": "multiselect",
      "selector": "div.row:has(button:has-text('Add Override')) button:has-text('Enabled Events')",
-     "source": "ShipperProfileIntegrationsPage.SEL_OVERRIDE_EVENTS_BUTTON"
+     "source": "ShipperProfileIntegrationsPage.SEL_OVERRIDE_EVENTS_BUTTON",
+     "fromList": true
     },
     {
      "id": "edi.override.add",
@@ -5057,7 +5067,8 @@
      "required": true,
      "scopedToRow": true,
      "selector": "div[role=\"dialog\"][data-state=\"open\"]:has(h2:has-text(\"Add Accessorials\")) table tbody tr:has(select.form-select) input[role=\"combobox\"]",
-     "source": "ShipmentBookingDetailsAccessorialsPage.ROW0_TYPE"
+     "source": "ShipmentBookingDetailsAccessorialsPage.ROW0_TYPE",
+     "fromList": true
     },
     {
      "id": "acc.row.description",
@@ -5136,7 +5147,9 @@
        "debounced": true,
        "confidence": "route-table"
       }
-     }
+     },
+     "sample": "QA Vendor",
+     "sampleSource": "playwright-automation features \u2014 the vendor the suite requests against"
     },
     {
      "id": "acc.row.shipperRate",
@@ -5634,7 +5647,8 @@
        ],
        "confidence": "route-table"
       }
-     }
+     },
+     "fromList": true
     },
     {
      "id": "invlist.reset",
@@ -6622,12 +6636,18 @@
      "then": [
       {
        "action": "pickOption",
-       "selector": "ul[role=\"listbox\"]",
-       "source": "BookingPage.EQUIPMENT_MULTISELECT_LISTBOX"
+       "selector": "ul[role=\"listbox\"] li[role=\"option\"], ul[role=\"listbox\"] li",
+       "source": "BookingPage.EQUIPMENT_MULTISELECT_LISTBOX + select_from_list option_selector"
       }
      ],
      "required": true,
-     "note": "Load Details will not advance without an equipment type."
+     "note": "Load Details will not advance without an equipment type. The trigger is a <button>, so the value cannot be typed into it \u2014 the popover option is clicked instead.",
+     "enum": [
+      "53' / Trailer",
+      "Dry Van",
+      "Flatbed"
+     ],
+     "enumSource": "playwright-automation: 53' / Trailer is the label the suite books with (25 uses)"
     },
     {
      "id": "sh.fullTruckload",
@@ -6871,7 +6891,9 @@
        "debounced": true,
        "confidence": "client"
       }
-     }
+     },
+     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
+     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
     },
     {
      "id": "sh.stop.contact",
@@ -7595,7 +7617,12 @@
      "selector": "[data-testid=\"DescriptionListItem-customer-service-type\"] [data-testid=\"pod-status-update-wrapper\"] [role=\"combobox\"]",
      "source": "ShipmentsPage.SHIPMENT_DETAILS_CST_SELECT_TRIGGER",
      "parent": "sh2.cst",
-     "control": "combobox"
+     "control": "combobox",
+     "enum": [
+      "Live",
+      "Drop"
+     ],
+     "enumSource": "apps/monolith/app/models/schema/order.js:39 service_type, title-cased as the UI shows them"
     },
     {
      "id": "sh2.cst.save",
@@ -8455,7 +8482,8 @@
      "name": "Operator",
      "control": "combobox",
      "selector": "[role=\"combobox\"]",
-     "source": "UVFilters.OPERATOR_BUTTON"
+     "source": "UVFilters.OPERATOR_BUTTON",
+     "fromList": true
     },
     {
      "id": "uv.filters.text",
@@ -9510,7 +9538,8 @@
      "name": "Sort",
      "control": "combobox",
      "selector": "button[role=\"combobox\"]:has(svg.lucide-arrow-up-down)",
-     "source": "CarrierPendingTasksPage.SORT_DROPDOWN_BTN"
+     "source": "CarrierPendingTasksPage.SORT_DROPDOWN_BTN",
+     "fromList": true
     },
     {
      "id": "cpt.pagination.summary",
@@ -11192,7 +11221,9 @@
        "debounced": true,
        "confidence": "client"
       }
-     }
+     },
+     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
+     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
     },
     {
      "id": "sp.book.appt",
@@ -11864,7 +11895,8 @@
      "name": "Equipment",
      "control": "combobox",
      "selector": "input[placeholder='Search for equipment']",
-     "source": "ViewOrdersPage.EQUIPMENT_FILTER_INPUT"
+     "source": "ViewOrdersPage.EQUIPMENT_FILTER_INPUT",
+     "fromList": true
     },
     {
      "id": "vo.filter.ar",
@@ -12701,7 +12733,9 @@
        "debounced": true,
        "confidence": "client"
       }
-     }
+     },
+     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
+     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
     },
     {
      "id": "q.originName",
@@ -12729,7 +12763,9 @@
      "control": "combobox",
      "required": true,
      "selector": "h3:has-text(\"Destination\") >> .. >> input[placeholder=\"Search for Location\"]",
-     "source": "QuotesPage.DESTINATION_ADDRESS_INPUT"
+     "source": "QuotesPage.DESTINATION_ADDRESS_INPUT",
+     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
+     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
     },
     {
      "id": "q.shipmentType",
@@ -13514,7 +13550,8 @@
      "required": true,
      "scopedToRow": true,
      "selector": "button:has-text(\"Field\")",
-     "source": "ExceptionRulesPage.CONDITION_FIELD_BTN"
+     "source": "ExceptionRulesPage.CONDITION_FIELD_BTN",
+     "fromList": true
     },
     {
      "id": "exc.builder.op",
@@ -13525,7 +13562,8 @@
      "required": true,
      "scopedToRow": true,
      "selector": "button:has-text(\"Operation\")",
-     "source": "ExceptionRulesPage.CONDITION_OP_BTN"
+     "source": "ExceptionRulesPage.CONDITION_OP_BTN",
+     "fromList": true
     },
     {
      "id": "exc.builder.value",
@@ -13535,7 +13573,8 @@
      "control": "combobox",
      "scopedToRow": true,
      "selector": "button:has-text(\"Value\")",
-     "source": "ExceptionRulesPage.CONDITION_VAL_BTN"
+     "source": "ExceptionRulesPage.CONDITION_VAL_BTN",
+     "fromList": true
     },
     {
      "id": "exc.builder.matchAll",
@@ -13954,7 +13993,8 @@
      "control": "combobox",
      "required": true,
      "selector": "[data-testid=\"lane-rate-zone-origin-search\"] input",
-     "source": "AddLaneRatesPage.SEL_ORIGIN_ZONE"
+     "source": "AddLaneRatesPage.SEL_ORIGIN_ZONE",
+     "fromList": true
     },
     {
      "id": "pr.lanes.destZone",
@@ -13964,7 +14004,8 @@
      "control": "combobox",
      "required": true,
      "selector": "[data-testid=\"lane-rate-zone-destination-search\"] input",
-     "source": "AddLaneRatesPage.SEL_DESTINATION_ZONE"
+     "source": "AddLaneRatesPage.SEL_DESTINATION_ZONE",
+     "fromList": true
     },
     {
      "id": "pr.lanes.rate",
@@ -14176,7 +14217,8 @@
      "control": "combobox",
      "scopedToRow": true,
      "selector": "td:nth-child(3) button[role='combobox']",
-     "source": "AccessorialRatesPage.STEP2_UNIT_COMBOBOX"
+     "source": "AccessorialRatesPage.STEP2_UNIT_COMBOBOX",
+     "fromList": true
     },
     {
      "id": "pr.acc.autoApply",
@@ -14293,7 +14335,8 @@
      "control": "combobox",
      "required": true,
      "selector": "[data-testid='button-fuel-surcharge-type-dropdown']",
-     "source": "ShipperFscPage.SEL_FUEL_SURCHARGE_TYPE"
+     "source": "ShipperFscPage.SEL_FUEL_SURCHARGE_TYPE",
+     "fromList": true
     },
     {
      "id": "pr.fsc.matrixSource",
@@ -14302,7 +14345,8 @@
      "name": "Matrix source",
      "control": "combobox",
      "selector": "[data-testid='button-matrix-source-dropdown']",
-     "source": "ShipperFscPage.SEL_MATRIX_SOURCE"
+     "source": "ShipperFscPage.SEL_MATRIX_SOURCE",
+     "fromList": true
     },
     {
      "id": "pr.fsc.validityStart",
@@ -20568,7 +20612,9 @@
      "selector": "div.modal-content[role='document']:has(h4.modal-title:has-text('Edit Location')) input[placeholder='Start typing to search for a location...']",
      "source": "ShipperProfilePage.EDIT_LOC_ADDRESS_INPUT",
      "parent": "sh.loc",
-     "control": "autocomplete"
+     "control": "autocomplete",
+     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
+     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
     },
     {
      "id": "sh.loc.save",
@@ -22124,7 +22170,8 @@
      "source": "ShipmentLegManagementPage.ADD_LEG_TYPE_DROPDOWN",
      "parent": "lg.add",
      "control": "combobox",
-     "required": true
+     "required": true,
+     "fromList": true
     },
     {
      "id": "lg.add.typeOption",
@@ -22169,7 +22216,12 @@
      "selector": "button[role=\"combobox\"]:has-text(\"Container\"), button[role=\"combobox\"]:has-text(\"Chassis\"), button[role=\"combobox\"]:has-text(\"Trailer\")",
      "source": "ShipmentLegManagementPage.ADD_LEG_EQUIPMENT_ASSET_TYPE",
      "parent": "lg.add",
-     "control": "combobox"
+     "control": "combobox",
+     "enum": [
+      "Container",
+      "Chassis"
+     ],
+     "enumSource": "LegsPage asset-type combobox labels"
     },
     {
      "id": "lg.add.equipNumBtn",
@@ -22206,7 +22258,12 @@
      "selector": "button[role=\"combobox\"]:has-text(\"Pound\"), button[role=\"combobox\"]:has-text(\"Kilogram\")",
      "source": "ShipmentLegManagementPage.ADD_LEG_WEIGHT_UNIT_DROPDOWN",
      "parent": "lg.add",
-     "control": "combobox"
+     "control": "combobox",
+     "enum": [
+      "Pound",
+      "Kilogram"
+     ],
+     "enumSource": "LegsPage weight-unit combobox labels"
     },
     {
      "id": "lg.add.weightUnitSel",
@@ -22235,7 +22292,9 @@
      "source": "ShipmentLegManagementPage.ADD_LEG_PICKUP_ADDRESS_INPUT",
      "parent": "lg.add",
      "control": "autocomplete",
-     "required": true
+     "required": true,
+     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
+     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
     },
     {
      "id": "lg.add.deliverName",
@@ -22255,7 +22314,9 @@
      "source": "ShipmentLegManagementPage.ADD_LEG_DELIVER_ADDRESS_INPUT",
      "parent": "lg.add",
      "control": "autocomplete",
-     "required": true
+     "required": true,
+     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
+     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
     },
     {
      "id": "lg.add.addrSuggest",
@@ -22454,7 +22515,8 @@
      "selector": "button#legType[role=\"combobox\"]",
      "source": "ShipmentLegManagementPage.EDIT_LEG_TYPE_DROPDOWN",
      "parent": "lg.edit",
-     "control": "combobox"
+     "control": "combobox",
+     "fromList": true
     },
     {
      "id": "lg.edit.typeOption",
@@ -22499,7 +22561,12 @@
      "selector": "button[role=\"combobox\"]:has-text(\"Container\"), button[role=\"combobox\"]:has-text(\"Chassis\"), button[role=\"combobox\"]:has-text(\"Trailer\")",
      "source": "ShipmentLegManagementPage.EDIT_LEG_EQUIPMENT_ASSET_TYPE",
      "parent": "lg.edit",
-     "control": "combobox"
+     "control": "combobox",
+     "enum": [
+      "Container",
+      "Chassis"
+     ],
+     "enumSource": "LegsPage asset-type combobox labels"
     },
     {
      "id": "lg.edit.equipNumBtn",
@@ -22536,7 +22603,12 @@
      "selector": "div.grid.grid-cols-2.gap-3 button[role=\"combobox\"]",
      "source": "ShipmentLegManagementPage.EDIT_LEG_WEIGHT_UNIT_DROPDOWN",
      "parent": "lg.edit",
-     "control": "combobox"
+     "control": "combobox",
+     "enum": [
+      "Pound",
+      "Kilogram"
+     ],
+     "enumSource": "LegsPage weight-unit combobox labels"
     },
     {
      "id": "lg.edit.weightUnitSel",
@@ -22563,7 +22635,9 @@
      "selector": "input#pickupAddress",
      "source": "ShipmentLegManagementPage.EDIT_LEG_PICKUP_ADDRESS_INPUT",
      "parent": "lg.edit",
-     "control": "autocomplete"
+     "control": "autocomplete",
+     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
+     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
     },
     {
      "id": "lg.edit.deliverName",
@@ -22581,7 +22655,9 @@
      "selector": "input#deliverAddress",
      "source": "ShipmentLegManagementPage.EDIT_LEG_DELIVER_ADDRESS_INPUT",
      "parent": "lg.edit",
-     "control": "autocomplete"
+     "control": "autocomplete",
+     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
+     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
     },
     {
      "id": "lg.edit.carrierBox",
@@ -22812,7 +22888,8 @@
      "source": "ShipmentLegManagementPage.HUBBING_YARD_DROPDOWN",
      "parent": "lg.hub",
      "control": "combobox",
-     "required": true
+     "required": true,
+     "fromList": true
     },
     {
      "id": "lg.hub.yardSel",
@@ -22831,7 +22908,8 @@
      "source": "ShipmentLegManagementPage.HUBBING_TYPE_DROPDOWN",
      "parent": "lg.hub",
      "control": "combobox",
-     "required": true
+     "required": true,
+     "fromList": true
     },
     {
      "id": "lg.hub.typeOption",
@@ -24193,7 +24271,8 @@
      "selector": "#reason-type",
      "source": "ShipmentBookingDetailsPage.APPT_REASON_TYPE_TRIGGER",
      "parent": "bd.appt",
-     "control": "combobox"
+     "control": "combobox",
+     "fromList": true
     },
     {
      "id": "bd.appt.reasonCode",
@@ -24202,7 +24281,8 @@
      "selector": "#reason-code",
      "source": "ShipmentBookingDetailsPage.APPT_REASON_CODE_TRIGGER",
      "parent": "bd.appt",
-     "control": "combobox"
+     "control": "combobox",
+     "fromList": true
     },
     {
      "id": "bd.appt.save",
@@ -25495,7 +25575,13 @@
      "selector": "[data-testid='CargomaticCollapsibleCard-1c577a2c'] [data-testid='Multiselect-74d07a16']",
      "source": "ShipmentBookingDetailsPage.ADDITIONAL_DETAILS_EQUIPMENT_TYPES_MULTISELECT",
      "parent": "bd.extra",
-     "control": "multiselect"
+     "control": "multiselect",
+     "enum": [
+      "53' / Trailer",
+      "Dry Van",
+      "Flatbed"
+     ],
+     "enumSource": "playwright-automation: the labels the suite books with"
     },
     {
      "id": "bd.extra.equipTypesBtn",
@@ -26918,7 +27004,8 @@
      "control": "combobox",
      "required": true,
      "selector": "#tariff-type",
-     "source": "TariffEditorModal.PROP_TYPE_BTN"
+     "source": "TariffEditorModal.PROP_TYPE_BTN",
+     "fromList": true
     },
     {
      "id": "pr.tariff.default",
