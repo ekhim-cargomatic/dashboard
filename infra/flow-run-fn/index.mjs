@@ -74,7 +74,29 @@ const s3 = new S3Client({});
  * says so — which is a better bound than a list of tags, because it is
  * regenerated from the same file the dashboard draws and cannot drift from it.
  */
-const flow = JSON.parse(readFileSync(new URL('./cargomatic.json', import.meta.url), 'utf8'));
+/*
+ * Deployed, the map sits beside this file: deploy-flow-fn.sh copies
+ * public/qa-flow/cargomatic.json into the package. Locally there is no such
+ * copy unless someone made one by hand, and a hand-made one is how the
+ * function ends up resolving plans from a map the dashboard stopped drawing
+ * weeks ago — the drift this comment claims is impossible. So: the sibling if
+ * the deploy put one there, otherwise the one file both the SPA and the deploy
+ * read.
+ */
+const MAP_SOURCES = ['./cargomatic.json', '../../public/qa-flow/cargomatic.json'];
+
+function loadFlow() {
+  for (const rel of MAP_SOURCES) {
+    try {
+      return JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+  }
+  throw new Error(`No flow map found. Looked for: ${MAP_SOURCES.join(', ')}`);
+}
+
+const flow = loadFlow();
 const ix = indexFlow(flow);
 
 /** Log lines returned per poll. A behave run prints a few hundred; this keeps

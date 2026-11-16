@@ -360,18 +360,24 @@ export function RunFlowDialog({
             <button type="button" className="fm-run-btn" onClick={() => ref.current?.close()} disabled={busy}>
               {phase.status === 'done' ? 'Close' : 'Cancel'}
             </button>
-            {phase.status !== 'done' && (
-              <button
-                type="button"
-                className="fm-run-btn primary"
-                onClick={() => void run()}
-                disabled={busy}
-              >
-                {phase.status === 'starting' ? 'Starting…'
-                  : phase.status === 'running' ? 'Running…'
-                  : `Run ${plan.steps.length} steps`}
-              </button>
-            )}
+            {/*
+              * Still offered once the run is over, because a finished run is
+              * usually the start of the next one: a step failed on a value or a
+              * selector, you change the value right here — the fields above stay
+              * editable — and go again. Closing the panel and walking back to the
+              * node to reopen it loses every edit on the way.
+              */}
+            <button
+              type="button"
+              className="fm-run-btn primary"
+              onClick={() => void run()}
+              disabled={busy}
+            >
+              {phase.status === 'starting' ? 'Starting…'
+                : phase.status === 'running' ? 'Running…'
+                : phase.status === 'done' ? 'Run again'
+                : `Run ${plan.steps.length} steps`}
+            </button>
           </div>
         )}
       </div>

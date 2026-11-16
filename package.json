@@ -17,7 +17,10 @@
     "fixtures": "node scripts/make-fixtures.mjs",
     "notion:local": "node infra/notion-agent-task/local-server.mjs",
     "deploy": "bash infra/deploy.sh",
-    "flow:targets": "node scripts/flow-targets.mjs"
+    "flow:targets": "node scripts/flow-targets.mjs",
+    "dev:all": "bash infra/dev.sh",
+    "flow:local": "node infra/flow-run-fn/local-server.mjs --real",
+    "flow:plan": "node infra/flow-run-fn/build-plan.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

@@ -28,7 +28,12 @@ _to_delete/
 # Python bytecode from scripts/validate-flow.py
 __pycache__/
 
-# Copied beside the function at deploy time (and by local-server.mjs) so plans
-# resolve from the same map the dashboard serves. The original is the one in
-# public/qa-flow; a committed duplicate is a second copy to forget to update.
+# Written here by deploy-flow-fn.sh only, so the deployed function carries the
+# map. The original is public/qa-flow/cargomatic.json. Nothing writes this
+# locally any more: local-server.mjs used to, once, and never refreshed it,
+# which left plans resolving from a months-old snapshot of a map that had moved
+# on. If one of these appears outside a deploy, delete it.
 infra/flow-run-fn/cargomatic.json
+
+# Allure results and screenshots from a local `npm run dev:all -- --real` run.
+reports/

@@ -8,7 +8,8 @@
  * one-at-a-time rule — is the same code. Only the AWS calls are faked, by
  * patching each SDK client's send() before the handler imports it.
  *
- *   npm i --no-save @aws-sdk/client-codebuild @aws-sdk/client-s3   # once
+ *   npm i --no-save @aws-sdk/client-codebuild @aws-sdk/client-s3 \
+ *                   @aws-sdk/client-cloudwatch-logs                # once
  *   node infra/flow-run-fn/local-server.mjs
  *
  * Then point the SPA at it, in public/config.json (gitignored):
@@ -21,10 +22,25 @@
  */
 
 import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
+import { writeFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const PORT = Number(process.env.PORT || 8788);
 const PROJECT = 'qa-flow-runner';
 const FAIL = process.argv.includes('--fail');
+
+// --real stops simulating and runs the plan in a browser, here, with the same
+// run_plan.py the CodeBuild image uses. The fake build is for working on the
+// dialog; this is for finding out whether a selector or a value is right,
+// which no amount of simulated phases will ever tell you.
+const REAL = process.argv.includes('--real');
+// Visible by default in --real: watching the step go wrong is the whole point.
+const HEADLESS = process.argv.includes('--headless');
+const PY = process.env.FLOW_PY || '../playwright-automation/.venv/bin/python';
+const REPO = process.env.FLOW_REPO || '../playwright-automation';
+const ENV = process.env.FLOW_ENV || 'staging';
 
 // ---------------------------------------------------------------- fake AWS --
 
@@ -41,6 +57,11 @@ const SCRIPT = [
 const builds = new Map();
 
 function phaseAt(build) {
+  // A real run is as long as it is: the phase follows the child process.
+  if (build.child) {
+    if (build.exitCode === null) return build.lines.length ? 'BUILD' : 'PROVISIONING';
+    return 'COMPLETED';
+  }
   let elapsed = Date.now() - build.startedAt;
   for (const [name, ms] of SCRIPT) {
     if (elapsed < ms || ms === 0) return name;
@@ -57,7 +78,9 @@ function snapshot(id) {
   return {
     id,
     currentPhase: phase,
-    buildStatus: done ? (FAIL ? 'FAILED' : 'SUCCEEDED') : 'IN_PROGRESS',
+    buildStatus: done
+      ? (build.child ? (build.exitCode === 0 ? 'SUCCEEDED' : 'FAILED') : (FAIL ? 'FAILED' : 'SUCCEEDED'))
+      : 'IN_PROGRESS',
     // groupName and streamName as well as the link: the handler tails the log
     // through them, and a fake build without them silently returns no output —
     // which looks exactly like a build that printed nothing.
@@ -100,6 +123,50 @@ s3sdk.S3Client.prototype.send = async function send(command) {
   throw new Error(`local-server does not simulate ${command.constructor.name}`);
 };
 
+/**
+ * Run the plan the handler just "uploaded", in a browser on this machine.
+ *
+ * The plan goes to a temp file because that is all run_plan.py wants — the
+ * Lambda's S3 round trip exists for size, not for ceremony, and the bytes are
+ * identical either way.
+ */
+function startRunner(build) {
+  build.lines = [];
+  build.exitCode = null;
+  const planPath = join(mkdtempSync(join(tmpdir(), 'flow-plan-')), 'plan.json');
+  writeFileSync(planPath, JSON.stringify(lastPlan));
+
+  const args = [
+    'infra/flow-runner/run_plan.py',
+    '--plan', planPath,
+    '--repo', REPO,
+    '--env', ENV,
+    '--headless', HEADLESS ? 'true' : 'false',
+  ];
+  console.log(`run    ${PY} ${args.join(' ')}`);
+  const child = spawn(PY, args, { cwd: process.cwd() });
+  build.child = child;
+
+  const take = (buf) => {
+    for (const line of String(buf).split('\n')) {
+      if (!line.trim()) continue;
+      build.lines.push(line);
+      console.log(`     | ${line}`);
+    }
+  };
+  child.stdout.on('data', take);
+  child.stderr.on('data', take);
+  child.on('error', (err) => {
+    build.lines.push(`could not start ${PY}: ${err.message}`,
+      'set FLOW_PY to the python that has playwright installed.');
+    build.exitCode = 127;
+  });
+  child.on('close', (code) => {
+    build.exitCode = code ?? 1;
+    build.lines.push('', `runner exited ${code}`);
+  });
+}
+
 let counter = 0;
 // The handler builds its client at module scope, so this has to be in place
 // before the import below — hence the patch on the prototype rather than on an
@@ -109,7 +176,9 @@ sdk.CodeBuildClient.prototype.send = async function send(command) {
 
   if (name === 'StartBuildCommand') {
     const id = `${PROJECT}:${crypto.randomUUID()}`;
-    builds.set(id, { startedAt: Date.now(), number: ++counter });
+    const build = { startedAt: Date.now(), number: ++counter };
+    builds.set(id, build);
+    if (REAL) startRunner(build);
     console.log(
       `start  ${id}\n`
       + `       ${command.input.environmentVariablesOverride.map((v) => `${v.name}=${v.value}`).join(' ')}`,
@@ -141,7 +210,17 @@ logsSdk.CloudWatchLogsClient.prototype.send = async function send(command) {
   }
   if (!lastPlan) return { events: [], nextForwardToken: 'f/0' };
 
-  const build = [...builds.values()].pop();
+  const live = [...builds.values()].pop();
+  if (live?.child) {
+    const at = Number(String(command.input.nextToken ?? 'f/0').slice(2));
+    const next = live.lines.slice(at);
+    return {
+      events: next.map((message) => ({ message })),
+      nextForwardToken: `f/${at + next.length}`,
+    };
+  }
+
+  const build = live;
   const elapsed = build ? Date.now() - build.startedAt : 0;
   // Start printing once the fake build reaches BUILD, then one step per 400ms.
   const reached = Math.max(0, Math.floor((elapsed - 8500) / 400));
@@ -174,15 +253,20 @@ process.env.PROJECT_NAME ??= PROJECT;
 process.env.DASHBOARD_BUCKET ??= 'local-bucket';
 process.env.PLAN_BUCKET ??= 'local-plans';
 process.env.ALLOWED_ORIGIN ??= 'http://localhost:5173';
-// The flow map has to sit beside index.mjs, the way the deploy script puts it
-// there — it is what plans are resolved from, and the handler reads it at
-// import time.
+// No copy of the flow map is made here. There used to be one, written beside
+// index.mjs only `if (!existsSync(...))` — so the first run took a snapshot of
+// public/qa-flow/cargomatic.json and every run after it resolved plans from
+// that snapshot, however far the real map had moved on. Editing the map and
+// watching the runner do the old thing anyway is the symptom; a gitignored
+// file nobody remembers writing is the cause. The handler now reads the
+// repo's map directly when no deployed copy is beside it, so there is nothing
+// left to go stale.
 {
-  const { copyFileSync, existsSync } = await import('node:fs');
-  const here = new URL('.', import.meta.url).pathname;
-  if (!existsSync(`${here}cargomatic.json`)) {
-    copyFileSync('public/qa-flow/cargomatic.json', `${here}cargomatic.json`);
-    console.log('copied public/qa-flow/cargomatic.json next to index.mjs');
+  const { existsSync, rmSync } = await import('node:fs');
+  const snapshot = new URL('./cargomatic.json', import.meta.url);
+  if (existsSync(snapshot)) {
+    rmSync(snapshot);
+    console.log('removed a stale cargomatic.json snapshot beside index.mjs');
   }
 }
 
@@ -214,10 +298,13 @@ createServer((req, res) => {
   });
 }).listen(PORT, () => {
   console.log(
-    `flow-run function on http://localhost:${PORT}  (simulated CodeBuild`
-    + `${FAIL ? ', builds FAIL' : ''})\n`
-    + `  plans resolved from the real flow map · a run takes ~20s`
-    + ` · origin ${process.env.ALLOWED_ORIGIN}\n`
-    + `  point public/config.json at: "runFlowUrl": "http://localhost:${PORT}/api/run-flow"`,
+    REAL
+      ? `flow-run function on http://localhost:${PORT}  (REAL runs)\n`
+        + `  ${PY} · repo ${REPO} · env ${ENV} · ${HEADLESS ? 'headless' : 'visible browser'}\n`
+        + `  a run drives a browser on this machine and writes to ${ENV}`
+      : `flow-run function on http://localhost:${PORT}  (simulated CodeBuild`
+        + `${FAIL ? ', builds FAIL' : ''})\n`
+        + `  plans resolved from the real flow map · a run takes ~20s · NO browser starts\n`
+        + `  pass --real to actually run the plan in a browser`,
   );
 });

@@ -585,8 +585,9 @@
        "source": "OrderBookingPage.DEST_ADDRESS_INPUT_SUGGESTION_ITEM"
       }
      ],
-     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
-     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
+     "sample": "2000 W Washington Blvd, Los Angeles, CA 90018",
+     "sampleSource": "playwright-automation features \u2014 the suite's other booking address (9 uses), kept distinct from the origin",
+     "note": "Must differ from the origin \u2014 an order whose two ends are the same address is not a lane."
     },
     {
      "id": "order.create.dest.name",
@@ -610,28 +611,29 @@
      "id": "order.create.equipment.bulk",
      "kind": "field",
      "parent": "order.create.sec.equipment",
-     "name": "Bulk equipment paste",
+     "name": "Equipment number (bulk)",
      "control": "textarea",
      "selector": "[data-testid=\"multi-equipment-input\"]",
      "source": "OrderBookingPage.EQUIPMENT_TEXTAREA",
-     "note": "Newline-separated equipment numbers. Faster than adding rows one at a time."
+     "note": "This textarea is the only way equipment gets onto the order: you type the number(s) here and click Add, which CREATES the rows below. The row inputs do not exist until then. Comma-separated for several (convertCommaSeparatedStringToArray, CreateOrderModal.js:1504).",
+     "required": true
     },
     {
      "id": "order.create.equipment.addRow",
      "kind": "action",
      "parent": "order.create.sec.equipment",
-     "name": "Add equipment row",
+     "name": "Add equipment",
      "action": "click",
      "selector": "[data-testid=\"add-equipment-button\"], [data-testid=\"order-add-equipment-button\"]",
-     "source": "OrderBookingPage.ADD_EQUIPMENT_ROW_BUTTON"
+     "source": "OrderBookingPage.ADD_EQUIPMENT_BULK_BUTTON + ADD_EQUIPMENT_ROW_BUTTON",
+     "note": "add-equipment-bulk-button does not exist in the app \u2014 CreateOrderModal.js:2560 renders this as add-equipment-button. It is also a no-op on an empty textarea (handleEquipmentBulkAdd guards on `if (value)`, CreateOrderModal.js:1503), and the textarea only renders while equipments.length === 0, so clicking Add first does nothing AND removes the only field that could have been typed into."
     },
     {
      "id": "order.create.equipment.id",
      "kind": "field",
      "parent": "order.create.sec.equipment",
-     "name": "Equipment number",
+     "name": "Equipment ID (row)",
      "control": "text",
-     "required": true,
      "selector": "input[name=\"equipment-id-input\"]",
      "source": "OrderBookingPage.EQUIPMENT_ID_INPUT",
      "api": {
@@ -654,7 +656,8 @@
        "note": "Duplicate check. A true result blocks submit, so assert it before clicking Create Order.",
        "confidence": "client"
       }
-     }
+     },
+     "note": "Pre-filled by the bulk Add above. Only exists after it, so it is never the thing to type into."
     },
     {
      "id": "order.create.equipment.type",
@@ -6851,33 +6854,51 @@
      "name": "Add stop",
      "action": "click",
      "selector": "header button[data-testid=\"circleButton\"][title=\"Add Stop\"]",
-     "source": "BookingPage.ROUTE_ADD_STOP_BTN"
+     "source": "BookingPage.ROUTE_ADD_STOP_BTN",
+     "repeatable": true,
+     "note": "The route step already renders a pickup and a delivery stop. Clicking this adds a THIRD, empty one, which fails the distance call at Next."
     },
     {
-     "id": "sh.stop.type",
+     "id": "sh.stop1.type",
      "kind": "field",
      "parent": "sh.step.route",
-     "name": "Stop type",
+     "name": "Stop 1 type",
      "control": "select",
      "required": true,
-     "scopedToRow": true,
-     "selector": "select.w-full.mb-4.form-select",
-     "source": "BookingPage.STOP_TYPE_SELECT"
+     "selector": "div.mb-6.grid:has(input[placeholder=\"Start typing to search for a location...\"]) >> nth=0 >> select.w-full.mb-4.form-select",
+     "source": "BookingPage.STOP_TYPE_SELECT",
+     "enum": [
+      "pickup"
+     ],
+     "enumSource": "BookingPage.fill_stop \u2014 the stops the suite books with"
     },
     {
-     "id": "sh.stop.address",
+     "id": "sh.stop1.locationName",
      "kind": "field",
      "parent": "sh.step.route",
-     "name": "Stop address",
+     "name": "Stop 1 location name",
+     "control": "text",
+     "required": true,
+     "selector": "div.mb-6.grid:has(input[placeholder=\"Start typing to search for a location...\"]) >> nth=0 >> input[placeholder*=\"location name\" i]",
+     "source": "BookingPage.STOP_LOCATION_NAME_INPUT",
+     "sample": "Long Beach",
+     "sampleSource": "BookingPage.fill_stop \u2014 the stops the suite books with"
+    },
+    {
+     "id": "sh.stop1.address",
+     "kind": "field",
+     "parent": "sh.step.route",
+     "name": "Stop 1 address",
      "control": "combobox",
      "required": true,
-     "scopedToRow": true,
-     "selector": "input[placeholder=\"Start typing to search for a location...\"][role=\"combobox\"]",
+     "selector": "div.mb-6.grid:has(input[placeholder=\"Start typing to search for a location...\"]) >> nth=0 >> input[placeholder=\"Start typing to search for a location...\"][role=\"combobox\"]",
      "source": "BookingPage.STOP_ADDRESS_INPUT",
+     "sample": "E 23rd St, Long Beach, CA, USA",
+     "sampleSource": "BookingPage.fill_stop \u2014 the stops the suite books with",
      "then": [
       {
        "action": "pickSuggestion",
-       "selector": "div.absolute.left-0.bg-white.shadow-lg a.list-group-item",
+       "selector": "div.mb-6.grid:has(input[placeholder=\"Start typing to search for a location...\"]) >> nth=0 >> div.absolute.left-0.bg-white.shadow-lg a.list-group-item",
        "source": "BookingPage.STOP_ADDRESS_SUGGESTION"
       }
      ],
@@ -6891,28 +6912,82 @@
        "debounced": true,
        "confidence": "client"
       }
-     },
-     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
-     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
+     }
     },
     {
-     "id": "sh.stop.contact",
+     "id": "sh.stop2.type",
+     "kind": "field",
+     "parent": "sh.step.route",
+     "name": "Stop 2 type",
+     "control": "select",
+     "required": true,
+     "selector": "div.mb-6.grid:has(input[placeholder=\"Start typing to search for a location...\"]) >> nth=1 >> select.w-full.mb-4.form-select",
+     "source": "BookingPage.STOP_TYPE_SELECT",
+     "enum": [
+      "deliver"
+     ],
+     "enumSource": "BookingPage.fill_stop \u2014 the stops the suite books with"
+    },
+    {
+     "id": "sh.stop2.locationName",
+     "kind": "field",
+     "parent": "sh.step.route",
+     "name": "Stop 2 location name",
+     "control": "text",
+     "required": true,
+     "selector": "div.mb-6.grid:has(input[placeholder=\"Start typing to search for a location...\"]) >> nth=1 >> input[placeholder*=\"location name\" i]",
+     "source": "BookingPage.STOP_LOCATION_NAME_INPUT",
+     "sample": "Washington",
+     "sampleSource": "BookingPage.fill_stop \u2014 the stops the suite books with"
+    },
+    {
+     "id": "sh.stop2.address",
+     "kind": "field",
+     "parent": "sh.step.route",
+     "name": "Stop 2 address",
+     "control": "combobox",
+     "required": true,
+     "selector": "div.mb-6.grid:has(input[placeholder=\"Start typing to search for a location...\"]) >> nth=1 >> input[placeholder=\"Start typing to search for a location...\"][role=\"combobox\"]",
+     "source": "BookingPage.STOP_ADDRESS_INPUT",
+     "sample": "144 Ln, Washington 98631, USA",
+     "sampleSource": "BookingPage.fill_stop \u2014 the stops the suite books with",
+     "then": [
+      {
+       "action": "pickSuggestion",
+       "selector": "div.mb-6.grid:has(input[placeholder=\"Start typing to search for a location...\"]) >> nth=1 >> div.absolute.left-0.bg-white.shadow-lg a.list-group-item",
+       "source": "BookingPage.STOP_ADDRESS_SUGGESTION"
+      }
+     ],
+     "api": {
+      "await": {
+       "method": "GET",
+       "path": "/api/v2/locations/autocomplete",
+       "status": [
+        200
+       ],
+       "debounced": true,
+       "confidence": "client"
+      }
+     }
+    },
+    {
+     "id": "sh.stop1.contact",
      "kind": "field",
      "parent": "sh.step.route",
      "name": "Contact",
      "control": "text",
      "scopedToRow": true,
-     "selector": "input[placeholder=\"Contact\"]",
+     "selector": "div.mb-6.grid:has(input[placeholder=\"Start typing to search for a location...\"]) >> nth=0 >> input[placeholder=\"Contact\"]",
      "source": "BookingPage.STOP_CONTACT_INPUT"
     },
     {
-     "id": "sh.stop.phone",
+     "id": "sh.stop1.phone",
      "kind": "field",
      "parent": "sh.step.route",
      "name": "Phone",
      "control": "tel",
      "scopedToRow": true,
-     "selector": "input[type=\"tel\"]",
+     "selector": "div.mb-6.grid:has(input[placeholder=\"Start typing to search for a location...\"]) >> nth=0 >> input[type=\"tel\"]",
      "source": "BookingPage.STOP_PHONE_INPUT"
     },
     {
@@ -12764,8 +12839,9 @@
      "required": true,
      "selector": "h3:has-text(\"Destination\") >> .. >> input[placeholder=\"Search for Location\"]",
      "source": "QuotesPage.DESTINATION_ADDRESS_INPUT",
-     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
-     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
+     "sample": "2000 W Washington Blvd, Los Angeles, CA 90018",
+     "sampleSource": "playwright-automation features \u2014 the suite's other booking address (9 uses), kept distinct from the origin",
+     "note": "Must differ from the origin \u2014 an order whose two ends are the same address is not a lane."
     },
     {
      "id": "q.shipmentType",
@@ -22315,8 +22391,9 @@
      "parent": "lg.add",
      "control": "autocomplete",
      "required": true,
-     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
-     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
+     "sample": "2000 W Washington Blvd, Los Angeles, CA 90018",
+     "sampleSource": "playwright-automation features \u2014 the suite's other booking address (9 uses), kept distinct from the origin",
+     "note": "Must differ from the origin \u2014 an order whose two ends are the same address is not a lane."
     },
     {
      "id": "lg.add.addrSuggest",
@@ -22656,8 +22733,9 @@
      "source": "ShipmentLegManagementPage.EDIT_LEG_DELIVER_ADDRESS_INPUT",
      "parent": "lg.edit",
      "control": "autocomplete",
-     "sample": "3000 Ocean Park Blvd, Santa Monica, CA 90405",
-     "sampleSource": "playwright-automation features \u2014 the address the suite books with (12 uses)"
+     "sample": "2000 W Washington Blvd, Los Angeles, CA 90018",
+     "sampleSource": "playwright-automation features \u2014 the suite's other booking address (9 uses), kept distinct from the origin",
+     "note": "Must differ from the origin \u2014 an order whose two ends are the same address is not a lane."
     },
     {
      "id": "lg.edit.carrierBox",

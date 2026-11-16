@@ -305,6 +305,16 @@ export function synthesize(node, run) {
     return { value: 'QA', byIndex: 0 };
   }
 
+  // An equipment/container number is validated for shape before the client
+  // will even call /api/v2/equipment/exists, so `QA 0000` produced no request
+  // and the step timed out waiting for one. ISO 6346 shape: four letters then
+  // seven digits. The digits are derived from the run so two runs never
+  // collide — the exists check blocks submit on a duplicate.
+  if (name.includes('equipment number') || name.includes('container number')) {
+    let h = 0;
+    for (const ch of String(run)) h = (h * 31 + ch.charCodeAt(0)) % 10000000;
+    return { value: `QAAU${String(h).padStart(7, '0')}` };
+  }
   if (name.includes('first')) return { value: 'QA' };
   if (name.includes('last')) return { value: 'Test' };
   if (name.includes('company')) return { value: `QA Co ${run}` };

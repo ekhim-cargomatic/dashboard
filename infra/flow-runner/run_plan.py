@@ -385,7 +385,14 @@ def perform(page, step: dict, config: dict, variables: dict) -> str:
     if verb == "select":
         ready(target)
         if value:
-            target.select_option(label=value)
+            # The map records what the <option> carries, and that differs by
+            # form: sometimes the visible label, sometimes the value attribute
+            # (the stop-type select is "pickup"/"deliver", not "Pickup"). Try
+            # the label, then the value, so either kind of ground truth works.
+            try:
+                target.select_option(label=value)
+            except Exception:
+                target.select_option(value=value)
         else:
             # The map knows the control, not the account's data, so "the first
             # real option" is the only choice that is right on every environment.
