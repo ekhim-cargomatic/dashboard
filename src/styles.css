@@ -1867,13 +1867,29 @@ button.btn.shot:hover {
    at this width is about 640x400 of real browser, which is enough to read a
    form and click the thing that is stuck. */
 
-.grid-wrap { display: flex; flex-direction: column; gap: 14px; }
+/* The grid borrows the flow map's full-bleed shell, and that shell is
+   height:100vh/overflow:hidden because the map scrolls its own canvas. Six
+   tiles are taller than the window, so without this the ones below the fold
+   are simply unreachable. Scrolling belongs here rather than on the page:
+   `min-height: 0` is what lets a flex child shrink below its content and
+   actually overflow, instead of stretching its parent past the viewport. */
+.grid-wrap {
+  display: flex; flex-direction: column; gap: 14px;
+  flex: 1; min-height: 0; min-width: 0;
+  overflow-y: auto; overflow-x: hidden;
+  /* Room for the last tile's shadow and a comfortable stop. */
+  padding-bottom: 4px;
+}
 
 .grid-bar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 10px 12px;
   border: 1px solid var(--line); border-radius: 10px;
   background: var(--panel);
+  /* Sticks while the tiles scroll under it: whether the grid is up, and the
+     URL to copy, are the two things worth having on screen the whole time. */
+  position: sticky; top: 0; z-index: 2;
+  flex: none;
 }
 .grid-spacer { flex: 1 1 auto; }
 .grid-url { font-size: 12px; opacity: .85; }
