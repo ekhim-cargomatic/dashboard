@@ -126,17 +126,37 @@ services:
       SE_NODE_GRID_URL: ${GRID_PUBLIC_URL:?set by deploy-grid.sh push}
 
   # ------------------------------------------------------- android slots --
-  # These need /dev/kvm, which on EC2 exists only when the instance was
-  # launched with --cpu-options NestedVirtualization=enabled, and only on
-  # C8i/M8i/R8i. Graviton cannot do this at all, which is why the host is
-  # x86-64 and not the cheaper arm64 it would otherwise want to be.
+  # Four slots, four devices, four Android versions. Varying both is the point:
+  # the driver app's bugs live in the gap between an OS that grants a permission
+  # silently and one that puts a dialog in front of it, and between a 4.95"
+  # screen and a 6.1" one. Running the same image four times would cost the same
+  # memory and tell you a quarter as much.
   #
-  # Unlike the Chrome slots these carry their own Appium rather than joining
-  # the Selenium hub: appium-automation already addresses slots by a per-slot
-  # appium_url (scripts/stress_parallel_drivers.py), so a hub in front of them
-  # would be a layer with nothing to do.
+  #   slot 1  Samsung Galaxy S10  Android 14   newest of both
+  #   slot 2  Samsung Galaxy S9   Android 13
+  #   slot 3  Nexus 5             Android 11   small screen, 4.95"
+  #   slot 4  Samsung Galaxy S6   Android 9    oldest supported
+  #
+  # Device names are not free text: the image resolves them against the
+  # profiles it ships, which are the six Samsung Galaxy ones plus the Nexus
+  # skins (nexus_4, nexus_5, nexus_7, nexus_one, nexus_s). An unknown name
+  # falls back to the default rather than failing, so a typo here shows up as
+  # a slot quietly running the wrong device.
+  #
+  # Tags are pinned to v3.9.0-p2 for the same reason the Selenium ones are
+  # pinned: a floating `emulator_14.0` is a different image next month, and
+  # "the grid changed under us" is not a thing anyone should have to debug.
+  #
+  # COST: each image is ~10.6GB and these are four different ones, so ~42GB of
+  # the host's 96GB disk. Four identical versions would be 10.6GB. That is the
+  # price of the coverage above, and it is why the root volume is 100GB.
+  #
+  # These do not join the Selenium hub. appium-automation already addresses
+  # slots by a per-slot appium_url (scripts/stress_parallel_drivers.py), so a
+  # hub in front of them would be a layer with nothing to do.
+
   android-1:
-    image: budtmo/docker-android:emulator_11.0
+    image: budtmo/docker-android:emulator_14.0_v3.9.0-p2
     container_name: qa-grid-android-1
     privileged: true
     devices: ["/dev/kvm:/dev/kvm"]
@@ -152,17 +172,49 @@ services:
     restart: unless-stopped
 
   android-2:
-    image: budtmo/docker-android:emulator_11.0
+    image: budtmo/docker-android:emulator_13.0_v3.9.0-p2
     container_name: qa-grid-android-2
     privileged: true
     devices: ["/dev/kvm:/dev/kvm"]
     ports:
-      - "4724:4723"
-      - "6082:6080"
+      - "4724:4723"   # Appium
+      - "6082:6080"   # noVNC
     environment:
-      EMULATOR_DEVICE: "Samsung Galaxy S10"
+      EMULATOR_DEVICE: "Samsung Galaxy S9"
       WEB_VNC: "true"
       APPIUM: "true"
       APPIUM_HOST: android-2
+    shm_size: 2gb
+    restart: unless-stopped
+
+  android-3:
+    image: budtmo/docker-android:emulator_11.0_v3.9.0-p2
+    container_name: qa-grid-android-3
+    privileged: true
+    devices: ["/dev/kvm:/dev/kvm"]
+    ports:
+      - "4725:4723"   # Appium
+      - "6083:6080"   # noVNC
+    environment:
+      EMULATOR_DEVICE: "Nexus 5"
+      WEB_VNC: "true"
+      APPIUM: "true"
+      APPIUM_HOST: android-3
+    shm_size: 2gb
+    restart: unless-stopped
+
+  android-4:
+    image: budtmo/docker-android:emulator_9.0_v3.9.0-p2
+    container_name: qa-grid-android-4
+    privileged: true
+    devices: ["/dev/kvm:/dev/kvm"]
+    ports:
+      - "4726:4723"   # Appium
+      - "6084:6080"   # noVNC
+    environment:
+      EMULATOR_DEVICE: "Samsung Galaxy S6"
+      WEB_VNC: "true"
+      APPIUM: "true"
+      APPIUM_HOST: android-4
     shm_size: 2gb
     restart: unless-stopped

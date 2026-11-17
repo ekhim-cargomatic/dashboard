@@ -120,10 +120,14 @@ PORTS=(
   "7902 noVNC Chrome slot 2"
   "7903 noVNC Chrome slot 3"
   "7904 noVNC Chrome slot 4"
-  "4723 Appium Android slot 1"
-  "4724 Appium Android slot 2"
+  "4723 Appium Android slot 1 - Galaxy S10 / Android 14"
+  "4724 Appium Android slot 2 - Galaxy S9 / Android 13"
+  "4725 Appium Android slot 3 - Nexus 5 / Android 11"
+  "4726 Appium Android slot 4 - Galaxy S6 / Android 9"
   "6081 noVNC Android slot 1"
   "6082 noVNC Android slot 2"
+  "6083 noVNC Android slot 3"
+  "6084 noVNC Android slot 4"
 )
 
 # ---------------------------------------------------------- instance role --
@@ -376,8 +380,10 @@ urls_for() {
               http://$ip:7903/?autoconnect=1&resize=scale   slot 3
               http://$ip:7904/?autoconnect=1&resize=scale   slot 4
 
-  Android     http://$ip:6081  (Appium :4723)               slot 1
-              http://$ip:6082  (Appium :4724)               slot 2
+  Android     http://$ip:6081  (Appium :4723)   Galaxy S10 / Android 14
+              http://$ip:6082  (Appium :4724)   Galaxy S9  / Android 13
+              http://$ip:6083  (Appium :4725)   Nexus 5    / Android 11
+              http://$ip:6084  (Appium :4726)   Galaxy S6  / Android 9
 
   Point the suite at it — no code change, Playwright reads the variable and
   launches Chrome through the hub, so features/environment.py keeps calling

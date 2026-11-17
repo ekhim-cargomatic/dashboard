@@ -46,9 +46,15 @@ interface Slot {
  * silently tiling the same session four times.
  */
 const CHROME_PORTS = [7901, 7902, 7903, 7904];
+/* The emulators deliberately differ from each other - see infra/grid for why -
+   so each one carries what it actually is. A tile labelled only "Android 3"
+   makes you go and read the compose file to find out which screen you are
+   looking at. */
 const ANDROID = [
-  { novnc: 6081, appium: 4723 },
-  { novnc: 6082, appium: 4724 },
+  { novnc: 6081, appium: 4723, device: 'Galaxy S10', os: '14' },
+  { novnc: 6082, appium: 4724, device: 'Galaxy S9', os: '13' },
+  { novnc: 6083, appium: 4725, device: 'Nexus 5', os: '11' },
+  { novnc: 6084, appium: 4726, device: 'Galaxy S6', os: '9' },
 ];
 
 const hostOf = (base: string): string | null => {
@@ -121,7 +127,7 @@ export function DeviceGrid({ config }: Props) {
     ANDROID.forEach((a, i) => {
       out.push({
         key: `android-${i + 1}`,
-        label: `Android ${i + 1}`,
+        label: `${a.device} · Android ${a.os}`,
         kind: 'android',
         view: `http://${host}:${a.novnc}/?autoconnect=1&resize=scale${auth}`,
         endpoint: `http://${host}:${a.appium}`,
