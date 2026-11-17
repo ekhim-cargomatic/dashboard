@@ -192,4 +192,19 @@ export interface AppConfig {
    * public/config.json (gitignored) and use the tab from localhost:5173.
    */
   gridBaseUrl: string;
+  /**
+   * noVNC password for the grid's slots, from GRID_VNC_PASSWORD.
+   *
+   * noVNC takes it in the query string, and `autoconnect=1` without one just
+   * parks at a prompt behind a tile that paints nothing - a 0x0 canvas and no
+   * error. So it has to reach the browser, which means it has to be in the
+   * config the page reads.
+   *
+   * It must NEVER be written into the deployed dist/config.json. That file is
+   * served world-readable by bucket policy, and this is the login to a browser
+   * someone could drive against staging. deploy.sh does not write this key and
+   * must not learn how; the grid tab is a localhost-only feature for exactly
+   * this reason. Empty is fine - the tiles then ask for the password once.
+   */
+  gridVncPassword: string;
 }

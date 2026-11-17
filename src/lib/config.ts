@@ -24,6 +24,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   runFlowUrl: '',
   runFlowToken: '',
   gridBaseUrl: '',
+  gridVncPassword: '',
 };
 
 export async function loadConfig(): Promise<AppConfig> {
@@ -45,6 +46,7 @@ export async function loadConfig(): Promise<AppConfig> {
       runFlowUrl: raw.runFlowUrl ?? DEFAULT_CONFIG.runFlowUrl,
       runFlowToken: raw.runFlowToken ?? DEFAULT_CONFIG.runFlowToken,
       gridBaseUrl: raw.gridBaseUrl ?? DEFAULT_CONFIG.gridBaseUrl,
+      gridVncPassword: raw.gridVncPassword ?? DEFAULT_CONFIG.gridVncPassword,
     };
   } catch {
     // No config.json deployed — same-origin defaults are the right guess.

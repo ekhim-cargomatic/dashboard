@@ -61,6 +61,12 @@ const hostOf = (base: string): string | null => {
 
 export function DeviceGrid({ config }: Props) {
   const host = useMemo(() => hostOf(config.gridBaseUrl), [config.gridBaseUrl]);
+  // noVNC wants the password in the query string. Without it `autoconnect=1`
+  // stops at a prompt and the tile paints nothing at all - a 0x0 canvas rather
+  // than an error, which looks exactly like a grid that is down.
+  const auth = config.gridVncPassword
+    ? `&password=${encodeURIComponent(config.gridVncPassword)}`
+    : '';
   const [busyCount, setBusyCount] = useState(0);
   const [reachable, setReachable] = useState<boolean | null>(null);
   const [nodes, setNodes] = useState(0);
@@ -108,7 +114,7 @@ export function DeviceGrid({ config }: Props) {
       key: `chrome-${i + 1}`,
       label: `Chrome ${i + 1}`,
       kind: 'chrome' as const,
-      view: `http://${host}:${port}/?autoconnect=1&resize=scale`,
+      view: `http://${host}:${port}/?autoconnect=1&resize=scale${auth}`,
       endpoint: `${config.gridBaseUrl} (slot ${i + 1})`,
       busy: i < busyCount,
     }));
@@ -117,7 +123,7 @@ export function DeviceGrid({ config }: Props) {
         key: `android-${i + 1}`,
         label: `Android ${i + 1}`,
         kind: 'android',
-        view: `http://${host}:${a.novnc}/`,
+        view: `http://${host}:${a.novnc}/?autoconnect=1&resize=scale${auth}`,
         endpoint: `http://${host}:${a.appium}`,
         busy: false,
       });
@@ -126,7 +132,7 @@ export function DeviceGrid({ config }: Props) {
     // busyCount only says HOW MANY sessions are live, not which node holds
     // them, so the first N tiles are marked rather than the right ones. The
     // screens themselves are unambiguous; this is only a hint.
-  }, [host, config.gridBaseUrl, busyCount]);
+  }, [host, config.gridBaseUrl, auth, busyCount]);
 
   if (!config.gridBaseUrl) {
     return (
