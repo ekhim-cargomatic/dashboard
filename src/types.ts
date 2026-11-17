@@ -181,4 +181,15 @@ export interface AppConfig {
    * can only run tagged tests against staging, one build at a time.
    */
   runFlowToken: string;
+  /**
+   * Origin of the device grid — `http://<host>:4444`, the Selenium hub.
+   *
+   * Deliberately absent from the deployed config.json, and the Grid tab is
+   * hidden when it is empty. Everything the tab shows lives behind a security
+   * group that admits one address, so publishing the host on a world-readable
+   * CloudFront page would hand out the location of a browser anyone inside
+   * that address can already drive against staging. Set it in the local
+   * public/config.json (gitignored) and use the tab from localhost:5173.
+   */
+  gridBaseUrl: string;
 }

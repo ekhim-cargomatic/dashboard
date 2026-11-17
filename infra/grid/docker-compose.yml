@@ -1,0 +1,168 @@
+# The grid itself: Chrome slots and Android slots on one host.
+#
+# Two things make this different from the CodeBuild runner, and both come from
+# the same place — a CodeBuild container has no inbound network, so it can only
+# ever push frames out. A long-lived host can be *connected to*, which buys:
+#
+#   - a WebDriver endpoint, so playwright-automation can drive these browsers
+#     with no code change (SELENIUM_REMOTE_URL=http://<host>:4444)
+#   - noVNC per slot, which is a real interactive session rather than a picture
+#     of one: you can click and type into a run while it is happening
+#
+# Ports are deliberately one-per-slot rather than one shared view. A single
+# standalone container with SE_NODE_MAX_SESSIONS would be fewer moving parts,
+# but every session would share one screen, and watching four runs overlap on
+# one desktop is worse than not watching at all.
+#
+#   4444          Selenium hub — the only port the test suite needs
+#   7901..7904    noVNC, one per Chrome slot
+#   4723..4724    Appium, one per Android slot
+#   6081..6082    noVNC, one per Android slot
+#
+# Sizing is for a c8i.4xlarge (16 vCPU / 32 GiB). Four Chrome slots at ~2 GiB
+# and two Android slots at ~4 GiB leaves real headroom; the emulators are what
+# run out first, which is why there are two of them and not four.
+
+name: qa-grid
+
+x-chrome-node: &chrome-node
+  image: selenium/node-chromium:4.27.0
+  depends_on: [hub]
+  environment: &chrome-env
+    SE_EVENT_BUS_HOST: hub
+    SE_EVENT_BUS_PUBLISH_PORT: 4442
+    SE_EVENT_BUS_SUBSCRIBE_PORT: 4443
+    # One session per node. The whole point of a slot is that it owns its
+    # screen — a second session on the same node would share the noVNC view
+    # with the first.
+    SE_NODE_MAX_SESSIONS: 1
+    SE_NODE_OVERRIDE_MAX_SESSIONS: "true"
+    SE_START_XVFB: "true"
+    # Chromium writes to /dev/shm and the Docker default of 64MB is not enough
+    # for a real page; the alternative is --disable-dev-shm-usage, which trades
+    # the crash for being slow.
+    SE_VNC_PASSWORD: ${GRID_VNC_PASSWORD:?set GRID_VNC_PASSWORD}
+  shm_size: 2gb
+  restart: unless-stopped
+
+services:
+  # WHY THE NODES ARE TOLD THE PUBLIC ADDRESS AND NOT http://hub:4444
+  #
+  # Playwright does not speak WebDriver to a Chrome it is given - it speaks CDP.
+  # It asks the grid for a session, and the grid replies with an `se:cdp`
+  # WebSocket to connect to. That URL is built from SE_NODE_GRID_URL, so with
+  # the compose-internal hostname the reply is ws://hub:4444/session/<id>/se/cdp
+  # and the client dies on `getaddrinfo ENOTFOUND hub`: the session is created,
+  # a slot is burned, and the run never starts. The node needs to advertise an
+  # address the CLIENT can reach, which is the instance's public IP.
+  #
+  # deploy-grid.sh push writes GRID_PUBLIC_URL into .env from whatever address
+  # the instance currently has. That address changes on every stop/start, so
+  # push is re-run after each `up` rather than only when the compose file
+  # changes.
+
+  # ------------------------------------------------------------------ hub --
+  # The one address the suite talks to. Playwright reads SELENIUM_REMOTE_URL
+  # and launches Chrome *through* here, so features/environment.py keeps
+  # calling browser_type.launch() and never learns it went remote.
+  hub:
+    image: selenium/hub:4.27.0
+    container_name: qa-grid-hub
+    ports:
+      - "4444:4444"   # WebDriver — this is the URL playwright-automation wants
+      - "4442:4442"
+      - "4443:4443"
+    environment:
+      # The dashboard's Grid tab reads /status with fetch() from localhost:5173,
+      # which is a cross-origin request. Without this the browser blocks the
+      # response and the tab reports a healthy grid as unreachable - while the
+      # noVNC tiles beside it work perfectly, because an iframe is not subject
+      # to CORS. Confusing enough to be worth the one line.
+      # --allow-cors, passed through SE_OPTS rather than as SE_ENABLE_CORS.
+      # This image accepts the SE_ENABLE_CORS variable without complaint and
+      # then ignores it: `printenv` shows it set while the server never gets
+      # the flag, so /status comes back with no Access-Control-Allow-Origin and
+      # the tab reports a healthy grid as unreachable. `hub --help` lists the
+      # real option; SE_OPTS is how the image forwards one.
+      SE_OPTS: "--allow-cors true"
+      # A grid run is N browsers doing real logins against staging. If a slot
+      # wedges, the session should die rather than hold the slot forever.
+      SE_SESSION_REQUEST_TIMEOUT: 300
+      SE_SESSION_RETRY_INTERVAL: 5
+      SE_NODE_SESSION_TIMEOUT: 900
+    restart: unless-stopped
+
+  # -------------------------------------------------------- chrome slots --
+  chrome-1:
+    <<: *chrome-node
+    container_name: qa-grid-chrome-1
+    ports: ["7901:7900"]
+    environment:
+      <<: *chrome-env
+      SE_NODE_GRID_URL: ${GRID_PUBLIC_URL:?set by deploy-grid.sh push}
+
+  chrome-2:
+    <<: *chrome-node
+    container_name: qa-grid-chrome-2
+    ports: ["7902:7900"]
+    environment:
+      <<: *chrome-env
+      SE_NODE_GRID_URL: ${GRID_PUBLIC_URL:?set by deploy-grid.sh push}
+
+  chrome-3:
+    <<: *chrome-node
+    container_name: qa-grid-chrome-3
+    ports: ["7903:7900"]
+    environment:
+      <<: *chrome-env
+      SE_NODE_GRID_URL: ${GRID_PUBLIC_URL:?set by deploy-grid.sh push}
+
+  chrome-4:
+    <<: *chrome-node
+    container_name: qa-grid-chrome-4
+    ports: ["7904:7900"]
+    environment:
+      <<: *chrome-env
+      SE_NODE_GRID_URL: ${GRID_PUBLIC_URL:?set by deploy-grid.sh push}
+
+  # ------------------------------------------------------- android slots --
+  # These need /dev/kvm, which on EC2 exists only when the instance was
+  # launched with --cpu-options NestedVirtualization=enabled, and only on
+  # C8i/M8i/R8i. Graviton cannot do this at all, which is why the host is
+  # x86-64 and not the cheaper arm64 it would otherwise want to be.
+  #
+  # Unlike the Chrome slots these carry their own Appium rather than joining
+  # the Selenium hub: appium-automation already addresses slots by a per-slot
+  # appium_url (scripts/stress_parallel_drivers.py), so a hub in front of them
+  # would be a layer with nothing to do.
+  android-1:
+    image: budtmo/docker-android:emulator_11.0
+    container_name: qa-grid-android-1
+    privileged: true
+    devices: ["/dev/kvm:/dev/kvm"]
+    ports:
+      - "4723:4723"   # Appium
+      - "6081:6080"   # noVNC
+    environment:
+      EMULATOR_DEVICE: "Samsung Galaxy S10"
+      WEB_VNC: "true"
+      APPIUM: "true"
+      APPIUM_HOST: android-1
+    shm_size: 2gb
+    restart: unless-stopped
+
+  android-2:
+    image: budtmo/docker-android:emulator_11.0
+    container_name: qa-grid-android-2
+    privileged: true
+    devices: ["/dev/kvm:/dev/kvm"]
+    ports:
+      - "4724:4723"
+      - "6082:6080"
+    environment:
+      EMULATOR_DEVICE: "Samsung Galaxy S10"
+      WEB_VNC: "true"
+      APPIUM: "true"
+      APPIUM_HOST: android-2
+    shm_size: 2gb
+    restart: unless-stopped

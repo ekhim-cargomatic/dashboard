@@ -16,6 +16,7 @@ import { enrichWithFailureDetail } from './lib/allure';
 import { resolveFlags, type FlagName } from './lib/flags';
 import { TrainingPanel } from './components/TrainingPanel';
 import { FlowMap } from './components/FlowMap';
+import { DeviceGrid } from './components/DeviceGrid';
 import { int, relativeTime } from './lib/format';
 import { AreaHeatmap } from './components/AreaHeatmap';
 import { AreaImpactChart, type ImpactMetric } from './components/AreaImpactChart';
@@ -27,7 +28,7 @@ import { AreaTable, ClustersTable, FailuresTable, RunsTable } from './components
 import type { AppConfig, GroupBy, RunSummary } from './types';
 
 type Theme = 'light' | 'dark' | 'system';
-type Tab = 'runs' | 'flow';
+type Tab = 'runs' | 'flow' | 'grid';
 
 /**
  * Areas are grouped by raw behave tag.
@@ -171,29 +172,38 @@ export default function App() {
   // The flow map is its own data source (public/qa-flow/), so it must not sit
   // behind the run-loading gates below — an unreachable bucket should not take
   // the map down with it.
+  // The Grid tab appears only when a grid is configured, which only happens in
+  // a local config.json — see AppConfig.gridBaseUrl for why it is never in the
+  // deployed one.
+  const views: Tab[] = ['runs', 'flow', ...(config?.gridBaseUrl ? (['grid'] as Tab[]) : [])];
+  const tabLabel = (t: Tab) => (t === 'runs' ? 'Runs' : t === 'flow' ? 'App flow' : 'Grid');
+
   const tabs = flags.qa ? (
     <div className="segmented" role="group" aria-label="View">
-      {(['runs', 'flow'] as Tab[]).map((option) => (
+      {views.map((option) => (
         <button
           key={option}
           type="button"
           aria-pressed={tab === option}
           onClick={() => setTab(option)}
         >
-          {option === 'runs' ? 'Runs' : 'App flow'}
+          {tabLabel(option)}
         </button>
       ))}
     </div>
   ) : null;
 
-  if (flags.qa && tab === 'flow') {
+  // Same shell as the flow map: full-bleed, its own data source, and not behind
+  // the run-loading gates — a bucket that will not list should not hide a grid
+  // that is running perfectly well.
+  if (flags.qa && (tab === 'flow' || tab === 'grid')) {
     return (
       <div className="app is-full">
         <header className="topbar">
           <div className="brand">
             <h1>QA Automation Dashboard</h1>
             <p className="brand-meta">
-              App flow map
+              {tab === 'grid' ? 'Device grid' : 'App flow map'}
               <span className="sep" aria-hidden="true">·</span>
               behind <code>?qa=1</code>
             </p>
@@ -216,7 +226,9 @@ export default function App() {
           </div>
         </header>
         <section className="block">
-          <FlowMap config={config} />
+          {tab === 'grid'
+            ? config && <DeviceGrid config={config} />
+            : <FlowMap config={config} />}
         </section>
       </div>
     );

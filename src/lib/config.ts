@@ -23,6 +23,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   notionFnToken: '',
   runFlowUrl: '',
   runFlowToken: '',
+  gridBaseUrl: '',
 };
 
 export async function loadConfig(): Promise<AppConfig> {
@@ -43,6 +44,7 @@ export async function loadConfig(): Promise<AppConfig> {
       notionFnToken: raw.notionFnToken ?? DEFAULT_CONFIG.notionFnToken,
       runFlowUrl: raw.runFlowUrl ?? DEFAULT_CONFIG.runFlowUrl,
       runFlowToken: raw.runFlowToken ?? DEFAULT_CONFIG.runFlowToken,
+      gridBaseUrl: raw.gridBaseUrl ?? DEFAULT_CONFIG.gridBaseUrl,
     };
   } catch {
     // No config.json deployed — same-origin defaults are the right guess.

@@ -1860,3 +1860,70 @@ button.btn.shot:hover {
    makes it fixable. */
 .fm-run-blockers { margin: 0; padding-left: 18px; font-size: 12px; color: var(--text-secondary); }
 .fm-run-blockers li { margin-bottom: 3px; }
+
+/* ----------------------------------------------------------- device grid -- */
+/* Tiles of live noVNC sessions. Unlike .fm-run-screen these are interactive
+   iframes, so they are sized to be usable rather than glanceable: a 16:10 tile
+   at this width is about 640x400 of real browser, which is enough to read a
+   form and click the thing that is stuck. */
+
+.grid-wrap { display: flex; flex-direction: column; gap: 14px; }
+
+.grid-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel);
+}
+.grid-spacer { flex: 1 1 auto; }
+.grid-url { font-size: 12px; opacity: .85; }
+
+.grid-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.grid-dot.is-up { background: var(--ok, #34a853); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok, #34a853) 22%, transparent); }
+.grid-dot.is-down { background: var(--muted, #9aa0a6); }
+
+.grid-hint { margin: 0; font-size: 13px; }
+
+.grid-tiles {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+}
+
+.grid-tile {
+  margin: 0; display: flex; flex-direction: column;
+  border: 1px solid var(--line); border-radius: 10px;
+  overflow: hidden; background: var(--panel);
+}
+.grid-tile figcaption {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.grid-tile iframe {
+  /* The tile is the product; let it have the room. */
+  width: 100%; aspect-ratio: 16 / 10; border: 0; display: block;
+  background: #111;
+}
+.grid-foot {
+  padding: 6px 10px; border-top: 1px solid var(--line);
+  font-size: 11px; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.grid-badge {
+  padding: 2px 7px; border-radius: 999px; font-weight: 600;
+  border: 1px solid var(--line);
+}
+.grid-badge.is-chrome { background: color-mix(in srgb, #4285f4 14%, transparent); }
+.grid-badge.is-android { background: color-mix(in srgb, #3ddc84 16%, transparent); }
+.grid-badge.is-busy { background: color-mix(in srgb, #fbbc04 22%, transparent); }
+
+.grid-empty { max-width: 56ch; display: flex; flex-direction: column; gap: 10px; }
+.grid-pre {
+  margin: 0; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel);
+  font-size: 12px; overflow-x: auto;
+}
+
+@media (max-width: 720px) {
+  .grid-tiles { grid-template-columns: 1fr; }
+}
