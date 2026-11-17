@@ -165,10 +165,27 @@ services:
       - "6081:6080"   # noVNC
     environment:
       EMULATOR_DEVICE: "Samsung Galaxy S10"
+      # swiftshader_indirect, not the image's default of "software".
+      # emulator.py:79 falls back to `software`, which rasterises every frame
+      # on one host thread -- fine for a settings screen, ruinous for a map
+      # that redraws continuously. SwiftShader is still software, but it is
+      # multithreaded and JIT-compiled, and it is what the emulator is tuned
+      # for on a headless host with no GPU. This is the fix for android-1
+      # sitting at ~700% CPU with nothing running.
+      EMULATOR_GPU: "swiftshader_indirect"
+      # -cores caps the guest at 2 vCPUs so one wedged emulator cannot take
+      # seven of the host's sixteen and starve the other three slots.
+      # -no-boot-anim and -no-snapshot cut cold-boot time and stop a half
+      # written snapshot being restored after a crash.
+      EMULATOR_ADDITIONAL_ARGS: "-cores 2 -no-boot-anim -no-snapshot"
       WEB_VNC: "true"
       APPIUM: "true"
       APPIUM_HOST: android-1
     shm_size: 2gb
+    # A ceiling the guest cannot talk its way past. -cores is what the emulator
+    # agrees to; this is what the kernel enforces. Four slots at 3.0 leaves 4 of
+    # the host's 16 cores for Chrome, Appium and the host itself.
+    cpus: 3.0
     restart: unless-stopped
     # Asks the DEVICE, not the server. When an emulator dies, supervisord
     # retries it a few times and then gives up for good ("entered FATAL state,
@@ -181,7 +198,15 @@ services:
     # see. start_period is generous because a cold emulator boot is ~50-90s and
     # four booting at once are slower.
     healthcheck:
-      test: ["CMD-SHELL", "adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1"]
+      # Three things, because boot_completed alone said "healthy" through both
+      # failures in the CAR-3184 run:
+      #   1. booted at all
+      #   2. ANSWERING - a trivial shell round trip under a timeout. A pegged
+      #      or wedged emulator still reports boot_completed=1 forever; what it
+      #      stops doing is replying. This is the check that catches ~700% CPU.
+      #   3. no ANR dialog holding focus. hide_error_dialogs should prevent
+      #      these, so if one appears the tuner has not run on this slot.
+      test: ["CMD-SHELL", "adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1 && timeout 12 adb shell echo ping 2>/dev/null | grep -q ping && ! timeout 12 adb shell dumpsys window 2>/dev/null | grep -i mCurrentFocus | grep -qi 'Application Not Responding'"]
       interval: 60s
       timeout: 15s
       retries: 3
@@ -197,10 +222,27 @@ services:
       - "6082:6080"   # noVNC
     environment:
       EMULATOR_DEVICE: "Samsung Galaxy S9"
+      # swiftshader_indirect, not the image's default of "software".
+      # emulator.py:79 falls back to `software`, which rasterises every frame
+      # on one host thread -- fine for a settings screen, ruinous for a map
+      # that redraws continuously. SwiftShader is still software, but it is
+      # multithreaded and JIT-compiled, and it is what the emulator is tuned
+      # for on a headless host with no GPU. This is the fix for android-1
+      # sitting at ~700% CPU with nothing running.
+      EMULATOR_GPU: "swiftshader_indirect"
+      # -cores caps the guest at 2 vCPUs so one wedged emulator cannot take
+      # seven of the host's sixteen and starve the other three slots.
+      # -no-boot-anim and -no-snapshot cut cold-boot time and stop a half
+      # written snapshot being restored after a crash.
+      EMULATOR_ADDITIONAL_ARGS: "-cores 2 -no-boot-anim -no-snapshot"
       WEB_VNC: "true"
       APPIUM: "true"
       APPIUM_HOST: android-2
     shm_size: 2gb
+    # A ceiling the guest cannot talk its way past. -cores is what the emulator
+    # agrees to; this is what the kernel enforces. Four slots at 3.0 leaves 4 of
+    # the host's 16 cores for Chrome, Appium and the host itself.
+    cpus: 3.0
     restart: unless-stopped
     # Asks the DEVICE, not the server. When an emulator dies, supervisord
     # retries it a few times and then gives up for good ("entered FATAL state,
@@ -213,7 +255,15 @@ services:
     # see. start_period is generous because a cold emulator boot is ~50-90s and
     # four booting at once are slower.
     healthcheck:
-      test: ["CMD-SHELL", "adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1"]
+      # Three things, because boot_completed alone said "healthy" through both
+      # failures in the CAR-3184 run:
+      #   1. booted at all
+      #   2. ANSWERING - a trivial shell round trip under a timeout. A pegged
+      #      or wedged emulator still reports boot_completed=1 forever; what it
+      #      stops doing is replying. This is the check that catches ~700% CPU.
+      #   3. no ANR dialog holding focus. hide_error_dialogs should prevent
+      #      these, so if one appears the tuner has not run on this slot.
+      test: ["CMD-SHELL", "adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1 && timeout 12 adb shell echo ping 2>/dev/null | grep -q ping && ! timeout 12 adb shell dumpsys window 2>/dev/null | grep -i mCurrentFocus | grep -qi 'Application Not Responding'"]
       interval: 60s
       timeout: 15s
       retries: 3
@@ -229,10 +279,27 @@ services:
       - "6083:6080"   # noVNC
     environment:
       EMULATOR_DEVICE: "Nexus 5"
+      # swiftshader_indirect, not the image's default of "software".
+      # emulator.py:79 falls back to `software`, which rasterises every frame
+      # on one host thread -- fine for a settings screen, ruinous for a map
+      # that redraws continuously. SwiftShader is still software, but it is
+      # multithreaded and JIT-compiled, and it is what the emulator is tuned
+      # for on a headless host with no GPU. This is the fix for android-1
+      # sitting at ~700% CPU with nothing running.
+      EMULATOR_GPU: "swiftshader_indirect"
+      # -cores caps the guest at 2 vCPUs so one wedged emulator cannot take
+      # seven of the host's sixteen and starve the other three slots.
+      # -no-boot-anim and -no-snapshot cut cold-boot time and stop a half
+      # written snapshot being restored after a crash.
+      EMULATOR_ADDITIONAL_ARGS: "-cores 2 -no-boot-anim -no-snapshot"
       WEB_VNC: "true"
       APPIUM: "true"
       APPIUM_HOST: android-3
     shm_size: 2gb
+    # A ceiling the guest cannot talk its way past. -cores is what the emulator
+    # agrees to; this is what the kernel enforces. Four slots at 3.0 leaves 4 of
+    # the host's 16 cores for Chrome, Appium and the host itself.
+    cpus: 3.0
     restart: unless-stopped
     # Asks the DEVICE, not the server. When an emulator dies, supervisord
     # retries it a few times and then gives up for good ("entered FATAL state,
@@ -245,7 +312,15 @@ services:
     # see. start_period is generous because a cold emulator boot is ~50-90s and
     # four booting at once are slower.
     healthcheck:
-      test: ["CMD-SHELL", "adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1"]
+      # Three things, because boot_completed alone said "healthy" through both
+      # failures in the CAR-3184 run:
+      #   1. booted at all
+      #   2. ANSWERING - a trivial shell round trip under a timeout. A pegged
+      #      or wedged emulator still reports boot_completed=1 forever; what it
+      #      stops doing is replying. This is the check that catches ~700% CPU.
+      #   3. no ANR dialog holding focus. hide_error_dialogs should prevent
+      #      these, so if one appears the tuner has not run on this slot.
+      test: ["CMD-SHELL", "adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1 && timeout 12 adb shell echo ping 2>/dev/null | grep -q ping && ! timeout 12 adb shell dumpsys window 2>/dev/null | grep -i mCurrentFocus | grep -qi 'Application Not Responding'"]
       interval: 60s
       timeout: 15s
       retries: 3
@@ -261,10 +336,27 @@ services:
       - "6084:6080"   # noVNC
     environment:
       EMULATOR_DEVICE: "Samsung Galaxy S6"
+      # swiftshader_indirect, not the image's default of "software".
+      # emulator.py:79 falls back to `software`, which rasterises every frame
+      # on one host thread -- fine for a settings screen, ruinous for a map
+      # that redraws continuously. SwiftShader is still software, but it is
+      # multithreaded and JIT-compiled, and it is what the emulator is tuned
+      # for on a headless host with no GPU. This is the fix for android-1
+      # sitting at ~700% CPU with nothing running.
+      EMULATOR_GPU: "swiftshader_indirect"
+      # -cores caps the guest at 2 vCPUs so one wedged emulator cannot take
+      # seven of the host's sixteen and starve the other three slots.
+      # -no-boot-anim and -no-snapshot cut cold-boot time and stop a half
+      # written snapshot being restored after a crash.
+      EMULATOR_ADDITIONAL_ARGS: "-cores 2 -no-boot-anim -no-snapshot"
       WEB_VNC: "true"
       APPIUM: "true"
       APPIUM_HOST: android-4
     shm_size: 2gb
+    # A ceiling the guest cannot talk its way past. -cores is what the emulator
+    # agrees to; this is what the kernel enforces. Four slots at 3.0 leaves 4 of
+    # the host's 16 cores for Chrome, Appium and the host itself.
+    cpus: 3.0
     restart: unless-stopped
     # Asks the DEVICE, not the server. When an emulator dies, supervisord
     # retries it a few times and then gives up for good ("entered FATAL state,
@@ -277,7 +369,15 @@ services:
     # see. start_period is generous because a cold emulator boot is ~50-90s and
     # four booting at once are slower.
     healthcheck:
-      test: ["CMD-SHELL", "adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1"]
+      # Three things, because boot_completed alone said "healthy" through both
+      # failures in the CAR-3184 run:
+      #   1. booted at all
+      #   2. ANSWERING - a trivial shell round trip under a timeout. A pegged
+      #      or wedged emulator still reports boot_completed=1 forever; what it
+      #      stops doing is replying. This is the check that catches ~700% CPU.
+      #   3. no ANR dialog holding focus. hide_error_dialogs should prevent
+      #      these, so if one appears the tuner has not run on this slot.
+      test: ["CMD-SHELL", "adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1 && timeout 12 adb shell echo ping 2>/dev/null | grep -q ping && ! timeout 12 adb shell dumpsys window 2>/dev/null | grep -i mCurrentFocus | grep -qi 'Application Not Responding'"]
       interval: 60s
       timeout: 15s
       retries: 3

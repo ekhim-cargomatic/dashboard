@@ -10,6 +10,8 @@
 #   ./infra/deploy-grid.sh push      # send the compose file up and restart it
 #   ./infra/deploy-grid.sh health    # per-slot health; a dead emulator shows here
 #   ./infra/deploy-grid.sh install-apk <apk>   # put the driver app on every slot
+#   ./infra/deploy-grid.sh restart [slot|all]  # recreate a slot (android-2) or everything
+#   ./infra/deploy-grid.sh chrome off|on       # park the Chrome slots during a stress run
 #   ./infra/deploy-grid.sh allow-ip  # re-point the security group at this IP
 #   ./infra/deploy-grid.sh destroy   # terminate and delete everything
 #
@@ -480,15 +482,66 @@ cmd_install_apk() {
   log "Installing on every emulator"
   script="$(cat <<EOS
 set -e
-curl -fsSL -o /tmp/grid-app.apk '$url'
+# Kept at a stable path, not in /tmp: the tuner reinstalls from here after a
+# slot is recreated, which is the only way to revive a dead emulator and
+# throws away the installed app every time.
+curl -fsSL -o /opt/qa-grid/app.apk '$url'
 for n in 1 2 3 4; do
-  docker cp /tmp/grid-app.apk qa-grid-android-\$n:/tmp/grid-app.apk
+  docker cp /opt/qa-grid/app.apk qa-grid-android-\$n:/tmp/app.apk
   printf "android-\$n: "
-  docker exec qa-grid-android-\$n sh -c "adb install -r -g /tmp/grid-app.apk 2>&1 | tail -1"
+  docker exec qa-grid-android-\$n sh -c "adb install -r -g /tmp/app.apk 2>&1 | tail -1"
 done
 EOS
   )"
   on_host "$id" "$script"
+}
+
+# Bring a slot back, or all of them.
+#
+# --force-recreate, NOT `docker compose restart`. A slot whose emulator died
+# has a supervisord that gave up on it ("device entered FATAL state, too many
+# start retries too quickly"), and restarting the container walks straight back
+# into the same state -- tried it, it sat unbooted. Recreating gets a clean
+# supervisord and boots in ~50s.
+cmd_restart() {
+  local id what script
+  what="${1:-all}"
+  id="$(instance_id)" || true
+  [[ -n "$id" ]] || die "no instance"
+  if [[ "$what" == "all" ]]; then
+    script="cd /opt/qa-grid && docker compose up -d --force-recreate"
+  elif [[ "$what" =~ ^(android|chrome)-[1-4]$ ]]; then
+    script="cd /opt/qa-grid && docker compose up -d --force-recreate $what"
+  else
+    die "usage: $0 restart [all|android-1..4|chrome-1..4]"
+  fi
+  log "Recreating ${what}"
+  on_host "$id" "$script
+sleep 3
+docker ps --format '{{.Names}}\t{{.Status}}' | sort"
+}
+
+# Give the emulators the whole machine.
+#
+# Four Chrome nodes are only ~250MB and ~1% CPU each at rest, so this is not
+# really about reclaiming much -- it is about the host not having 16 cores'
+# worth of claimants when four software-rendered emulators are all drawing maps
+# at once. During a stress sweep the Selenium side is idle anyway.
+cmd_chrome() {
+  local id what
+  what="${1:-}"
+  id="$(instance_id)" || true
+  [[ -n "$id" ]] || die "no instance"
+  case "$what" in
+    off) log "Stopping the Chrome slots and the hub"
+         on_host "$id" "cd /opt/qa-grid && docker compose stop hub chrome-1 chrome-2 chrome-3 chrome-4
+docker ps --format '{{.Names}}\t{{.Status}}' | sort" ;;
+    on)  log "Starting the Chrome slots and the hub"
+         on_host "$id" "cd /opt/qa-grid && docker compose start hub chrome-1 chrome-2 chrome-3 chrome-4
+sleep 3
+docker ps --format '{{.Names}}\t{{.Status}}' | sort" ;;
+    *)   die "usage: $0 chrome {off|on}" ;;
+  esac
 }
 
 # Container-level health, which is the only place a dead emulator shows up.
@@ -558,6 +611,8 @@ cmd_push() {
   ip="$(public_ip "$id")"
   [[ -n "$ip" ]] || die "instance has no public address"
   compose="$(base64 < "$HERE/grid/docker-compose.yml" | tr -d '\n')"
+  local tuner
+  tuner="$(base64 < "$HERE/grid/tune.sh" | tr -d '\n')"
   script="$(cat <<EOF
 set -e
 mkdir -p /opt/qa-grid
@@ -565,6 +620,23 @@ echo '$compose' | base64 -d > /opt/qa-grid/docker-compose.yml
 printf 'GRID_VNC_PASSWORD=%s\nGRID_PUBLIC_URL=http://$ip:4444\n' '$GRID_VNC_PASSWORD' > /opt/qa-grid/.env
 chmod 600 /opt/qa-grid/.env
 cat /var/log/qa-grid-kvm.log 2>/dev/null || echo "cloud-init has not finished yet"
+echo '$tuner' | base64 -d > /opt/qa-grid/tune.sh
+chmod +x /opt/qa-grid/tune.sh
+cat > /etc/systemd/system/qa-grid-tuner.service <<'UNIT'
+[Unit]
+Description=Hold ANR dialogs off and animations at zero on every emulator
+After=docker.service
+Requires=docker.service
+[Service]
+ExecStart=/opt/qa-grid/tune.sh
+Restart=always
+RestartSec=10
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now qa-grid-tuner.service
+systemctl restart qa-grid-tuner.service
 cd /opt/qa-grid && docker compose up -d --force-recreate
 docker compose ps --format '{{.Name}}\t{{.Status}}'
 EOF
@@ -604,8 +676,10 @@ case "${1:-status}" in
   status)   cmd_status ;;
   push)     cmd_push ;;
   health)   cmd_health ;;
+  restart)  shift; cmd_restart "${1:-all}" ;;
+  chrome)   shift; cmd_chrome "${1:-}" ;;
   install-apk) shift; cmd_install_apk "${1:-}" ;;
   allow-ip) allow_ip >/dev/null ;;
   destroy)  cmd_destroy ;;
-  *) echo "usage: $0 {up|down|status|push|health|install-apk <apk>|allow-ip|destroy}" >&2; exit 2 ;;
+  *) echo "usage: $0 {up|down|status|push|health|restart [slot|all]|chrome {off|on}|install-apk <apk>|allow-ip|destroy}" >&2; exit 2 ;;
 esac
