@@ -8,6 +8,7 @@
 #   ./infra/deploy-grid.sh down      # STOP the instance (keeps the disk)
 #   ./infra/deploy-grid.sh status    # where it is and what the URLs are
 #   ./infra/deploy-grid.sh push      # send the compose file up and restart it
+#   ./infra/deploy-grid.sh health    # per-slot health; a dead emulator shows here
 #   ./infra/deploy-grid.sh allow-ip  # re-point the security group at this IP
 #   ./infra/deploy-grid.sh destroy   # terminate and delete everything
 #
@@ -445,6 +446,18 @@ cmd_down() {
   echo "  stopped. EBS keeps billing (~\$8/month for ${DISK_GB}GB); compute does not."
 }
 
+# Container-level health, which is the only place a dead emulator shows up.
+# Appium answers "ready" with no device attached, so neither the port nor the
+# dashboard can tell you a slot is empty -- see the healthcheck in
+# grid/docker-compose.yml.
+cmd_health() {
+  local id
+  id="$(instance_id)" || true
+  [[ -n "$id" ]] || die "no instance"
+  [[ "$(state_of "$id")" == "running" ]] || die "instance is not running"
+  on_host "$id" "docker ps --format '{{.Names}}\t{{.Status}}' | sort"
+}
+
 cmd_status() {
   local id state ip
   id="$(instance_id)" || true
@@ -545,7 +558,8 @@ case "${1:-status}" in
   down)     cmd_down ;;
   status)   cmd_status ;;
   push)     cmd_push ;;
+  health)   cmd_health ;;
   allow-ip) allow_ip >/dev/null ;;
   destroy)  cmd_destroy ;;
-  *) echo "usage: $0 {up|down|status|push|allow-ip|destroy}" >&2; exit 2 ;;
+  *) echo "usage: $0 {up|down|status|push|health|allow-ip|destroy}" >&2; exit 2 ;;
 esac

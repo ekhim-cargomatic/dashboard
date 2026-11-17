@@ -170,6 +170,22 @@ services:
       APPIUM_HOST: android-1
     shm_size: 2gb
     restart: unless-stopped
+    # Asks the DEVICE, not the server. When an emulator dies, supervisord
+    # retries it a few times and then gives up for good ("entered FATAL state,
+    # too many start retries too quickly") -- while appium, vnc and the rest
+    # stay up. So the container is running, the port answers, and Appium's
+    # /status still says `ready: true`, because readiness there means the
+    # server will accept a connection, not that anything is attached to it.
+    # The only outward sign is a noVNC desktop with no phone on it.
+    # `docker ps` now says unhealthy instead, which is something a script can
+    # see. start_period is generous because a cold emulator boot is ~50-90s and
+    # four booting at once are slower.
+    healthcheck:
+      test: ["CMD-SHELL", "adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 300s
 
   android-2:
     image: budtmo/docker-android:emulator_13.0_v3.9.0-p2
@@ -186,6 +202,22 @@ services:
       APPIUM_HOST: android-2
     shm_size: 2gb
     restart: unless-stopped
+    # Asks the DEVICE, not the server. When an emulator dies, supervisord
+    # retries it a few times and then gives up for good ("entered FATAL state,
+    # too many start retries too quickly") -- while appium, vnc and the rest
+    # stay up. So the container is running, the port answers, and Appium's
+    # /status still says `ready: true`, because readiness there means the
+    # server will accept a connection, not that anything is attached to it.
+    # The only outward sign is a noVNC desktop with no phone on it.
+    # `docker ps` now says unhealthy instead, which is something a script can
+    # see. start_period is generous because a cold emulator boot is ~50-90s and
+    # four booting at once are slower.
+    healthcheck:
+      test: ["CMD-SHELL", "adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 300s
 
   android-3:
     image: budtmo/docker-android:emulator_11.0_v3.9.0-p2
@@ -202,6 +234,22 @@ services:
       APPIUM_HOST: android-3
     shm_size: 2gb
     restart: unless-stopped
+    # Asks the DEVICE, not the server. When an emulator dies, supervisord
+    # retries it a few times and then gives up for good ("entered FATAL state,
+    # too many start retries too quickly") -- while appium, vnc and the rest
+    # stay up. So the container is running, the port answers, and Appium's
+    # /status still says `ready: true`, because readiness there means the
+    # server will accept a connection, not that anything is attached to it.
+    # The only outward sign is a noVNC desktop with no phone on it.
+    # `docker ps` now says unhealthy instead, which is something a script can
+    # see. start_period is generous because a cold emulator boot is ~50-90s and
+    # four booting at once are slower.
+    healthcheck:
+      test: ["CMD-SHELL", "adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 300s
 
   android-4:
     image: budtmo/docker-android:emulator_9.0_v3.9.0-p2
@@ -218,3 +266,19 @@ services:
       APPIUM_HOST: android-4
     shm_size: 2gb
     restart: unless-stopped
+    # Asks the DEVICE, not the server. When an emulator dies, supervisord
+    # retries it a few times and then gives up for good ("entered FATAL state,
+    # too many start retries too quickly") -- while appium, vnc and the rest
+    # stay up. So the container is running, the port answers, and Appium's
+    # /status still says `ready: true`, because readiness there means the
+    # server will accept a connection, not that anything is attached to it.
+    # The only outward sign is a noVNC desktop with no phone on it.
+    # `docker ps` now says unhealthy instead, which is something a script can
+    # see. start_period is generous because a cold emulator boot is ~50-90s and
+    # four booting at once are slower.
+    healthcheck:
+      test: ["CMD-SHELL", "adb shell getprop sys.boot_completed 2>/dev/null | grep -q 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 300s
