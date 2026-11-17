@@ -9,6 +9,7 @@
 #   ./infra/deploy-grid.sh status    # where it is and what the URLs are
 #   ./infra/deploy-grid.sh push      # send the compose file up and restart it
 #   ./infra/deploy-grid.sh health    # per-slot health; a dead emulator shows here
+#   ./infra/deploy-grid.sh install-apk <apk>   # put the driver app on every slot
 #   ./infra/deploy-grid.sh allow-ip  # re-point the security group at this IP
 #   ./infra/deploy-grid.sh destroy   # terminate and delete everything
 #
@@ -446,6 +447,50 @@ cmd_down() {
   echo "  stopped. EBS keeps billing (~\$8/month for ${DISK_GB}GB); compute does not."
 }
 
+# Put the driver app on every emulator.
+#
+# Appium resolves the `app` capability on the SERVER, not the client, so a
+# local path in staging.json means "a path on the grid host" and a session
+# fails with "does not exist or is not accessible". The apk has to be on the
+# device before the session starts; then the caps carry appPackage/appActivity
+# and no `app` at all, which also makes a session start in ~4s instead of
+# uploading 145MB each time.
+#
+# It travels by presigned URL rather than by giving this instance S3 access.
+# The box runs a browser that anyone on the allowed IP can drive by hand; a
+# role that can read a bucket is exactly the kind of thing not to leave on it.
+# The URL expires in an hour and grants nothing after that.
+cmd_install_apk() {
+  local id apk bucket key url script
+  apk="${1:-${GRID_APK:-}}"
+  [[ -n "$apk" && -f "$apk" ]] || die "usage: $0 install-apk /path/to/app.apk (or set GRID_APK)"
+  bucket="${GRID_APK_BUCKET:-$(aws lambda get-function-configuration \
+            --function-name "${FLOW_FN_NAME:-qa-dashboard-run-flow}" --region "$REGION" \
+            --query 'Environment.Variables.PLAN_BUCKET' --output text 2>/dev/null)}"
+  [[ -n "$bucket" && "$bucket" != "None" ]] || die "no private bucket to stage the apk through; set GRID_APK_BUCKET"
+
+  id="$(instance_id)" || true
+  [[ -n "$id" ]] || die "no instance - './infra/deploy-grid.sh up'"
+
+  key="grid/$(basename "$apk")"
+  log "Staging $(basename "$apk") in s3://$bucket/$key"
+  aws s3 cp "$apk" "s3://$bucket/$key" --region "$REGION" --only-show-errors
+  url="$(aws s3 presign "s3://$bucket/$key" --region "$REGION" --expires-in 3600)"
+
+  log "Installing on every emulator"
+  script="$(cat <<EOS
+set -e
+curl -fsSL -o /tmp/grid-app.apk '$url'
+for n in 1 2 3 4; do
+  docker cp /tmp/grid-app.apk qa-grid-android-\$n:/tmp/grid-app.apk
+  printf "android-\$n: "
+  docker exec qa-grid-android-\$n sh -c "adb install -r -g /tmp/grid-app.apk 2>&1 | tail -1"
+done
+EOS
+  )"
+  on_host "$id" "$script"
+}
+
 # Container-level health, which is the only place a dead emulator shows up.
 # Appium answers "ready" with no device attached, so neither the port nor the
 # dashboard can tell you a slot is empty -- see the healthcheck in
@@ -559,7 +604,8 @@ case "${1:-status}" in
   status)   cmd_status ;;
   push)     cmd_push ;;
   health)   cmd_health ;;
+  install-apk) shift; cmd_install_apk "${1:-}" ;;
   allow-ip) allow_ip >/dev/null ;;
   destroy)  cmd_destroy ;;
-  *) echo "usage: $0 {up|down|status|push|health|allow-ip|destroy}" >&2; exit 2 ;;
+  *) echo "usage: $0 {up|down|status|push|health|install-apk <apk>|allow-ip|destroy}" >&2; exit 2 ;;
 esac
