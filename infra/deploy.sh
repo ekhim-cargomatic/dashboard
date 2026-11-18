@@ -348,10 +348,30 @@ jq -n \
   --arg notionFnToken "${DASHBOARD_TOKEN:-}" \
   --arg runFlowUrl "${RUN_FLOW_URL:-}" \
   --arg runFlowToken "${DASHBOARD_TOKEN:-}" \
+  --arg gridBaseUrl "${GRID_BASE_URL:-}" \
   '{dataBaseUrl: "", reportBaseUrl: "", runsPrefix: $prefix, maxRunsPerWorkflow: $maxRuns,
     notionFnUrl: $notionFnUrl, notionFnToken: $notionFnToken,
-    runFlowUrl: $runFlowUrl, runFlowToken: $runFlowToken}' \
+    runFlowUrl: $runFlowUrl, runFlowToken: $runFlowToken,
+    gridBaseUrl: $gridBaseUrl}' \
   > "$ROOT/dist/config.json"
+
+# The grid's ADDRESS ships; its noVNC password deliberately does not.
+#
+# This file is world-readable by bucket policy, so everything in it is public.
+# The address being public costs nothing on its own: the grid's security group
+# admits one IP, so a stranger who knows where it is still cannot open a socket
+# to it, and the tab they get is a dead one. The password is different in kind
+# -- it is the login to a browser sitting on staging -- and once published it
+# is published for good, leaving the IP allowlist as the only thing between a
+# stranger and that browser. So gridVncPassword stays in public/config.json,
+# which is gitignored and never uploaded, and the deployed tiles ask for it.
+#
+# GRID_BASE_URL lives in infra/deploy.env and is refreshed by deploy-grid.sh
+# whenever the instance comes up, because stopping and starting it hands back
+# a different public address every time.
+if [[ -n "${GRID_BASE_URL:-}" ]]; then
+  log "Grid tab enabled at ${GRID_BASE_URL} (address only, no VNC password)"
+fi
 
 log "Uploading to s3://$BUCKET"
 # Hashed assets are immutable and cached hard; everything else must revalidate so

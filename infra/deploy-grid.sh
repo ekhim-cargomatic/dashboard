@@ -256,6 +256,23 @@ allow_ip() {
   printf '%s' "$id"
 }
 
+# Write the current address into deploy.env so the dashboard deploy can publish
+# it. Stopping and starting the instance hands back a different public IP, and a
+# dashboard advertising last week's address is worse than one advertising none:
+# the tab renders, the status line says "Not reachable", and the obvious reading
+# is that the grid is down rather than that the config is stale.
+remember_address() {
+  local ip="$1" env_file="$HERE/deploy.env" url="http://$1:4444"
+  [[ -f "$env_file" ]] || return 0
+  if grep -q '^GRID_BASE_URL=' "$env_file"; then
+    local tmp; tmp="$(mktemp)"
+    sed "s|^GRID_BASE_URL=.*|GRID_BASE_URL=$url|" "$env_file" > "$tmp" && mv "$tmp" "$env_file"
+  else
+    printf '\n# Published in the deployed config.json so the Grid tab appears.\n# The noVNC password is NOT published - see infra/deploy.sh.\nGRID_BASE_URL=%s\n' "$url" >> "$env_file"
+  fi
+  echo "  deploy.env GRID_BASE_URL=$url" >&2
+}
+
 # ------------------------------------------------------------------ create --
 
 user_data() {
@@ -427,6 +444,8 @@ cmd_up() {
   log "Waiting for it to run"
   aws ec2 wait instance-running --region "$REGION" --instance-ids "$id"
   ip="$(public_ip "$id")"
+
+  remember_address "$ip"
 
   log "Up"
   echo "  instance  $id"

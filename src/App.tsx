@@ -177,12 +177,12 @@ export default function App() {
   // from the deployed config.json (see AppConfig.gridBaseUrl), so the tab is
   // invisible on CloudFront whatever the flag says. Gating it a second time
   // only meant typing ?qa=1 to reach a grid that is plainly configured.
+  // Neither of these is behind ?qa=1 any more. Each already gates itself on
+  // something real -- the flow map on having a map to draw, the grid on having
+  // a grid configured -- and a flag on top of that only meant knowing to type
+  // a query string to reach a tab that was going to work anyway.
   const hasGrid = Boolean(config?.gridBaseUrl);
-  const views: Tab[] = [
-    'runs',
-    ...(flags.qa ? (['flow'] as Tab[]) : []),
-    ...(hasGrid ? (['grid'] as Tab[]) : []),
-  ];
+  const views: Tab[] = ['runs', 'flow', ...(hasGrid ? (['grid'] as Tab[]) : [])];
   const tabLabel = (t: Tab) => (t === 'runs' ? 'Runs' : t === 'flow' ? 'App flow' : 'Grid');
 
   // Shown whenever there is more than one place to go.
@@ -204,7 +204,7 @@ export default function App() {
   // Same shell as the flow map: full-bleed, its own data source, and not behind
   // the run-loading gates — a bucket that will not list should not hide a grid
   // that is running perfectly well.
-  if ((flags.qa && tab === 'flow') || (hasGrid && tab === 'grid')) {
+  if (tab === 'flow' || (hasGrid && tab === 'grid')) {
     return (
       <div className="app is-full">
         <header className="topbar">
@@ -212,12 +212,6 @@ export default function App() {
             <h1>QA Automation Dashboard</h1>
             <p className="brand-meta">
               {tab === 'grid' ? 'Device grid' : 'App flow map'}
-              {tab === 'flow' && (
-                <>
-                  <span className="sep" aria-hidden="true">·</span>
-                  behind <code>?qa=1</code>
-                </>
-              )}
             </p>
           </div>
           <div className="topbar-controls">
