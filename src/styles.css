@@ -1884,8 +1884,8 @@ button.btn.shot:hover {
 .grid-bar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 10px 12px;
-  border: 1px solid var(--line); border-radius: 10px;
-  background: var(--panel);
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-1);
   /* Sticks while the tiles scroll under it: whether the grid is up, and the
      URL to copy, are the two things worth having on screen the whole time. */
   position: sticky; top: 0; z-index: 2;
@@ -1895,8 +1895,8 @@ button.btn.shot:hover {
 .grid-url { font-size: 12px; opacity: .85; }
 
 .grid-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.grid-dot.is-up { background: var(--ok, #34a853); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok, #34a853) 22%, transparent); }
-.grid-dot.is-down { background: var(--muted, #9aa0a6); }
+.grid-dot.is-up { background: var(--status-good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-good) 22%, transparent); }
+.grid-dot.is-down { background: var(--text-muted); }
 
 .grid-hint { margin: 0; font-size: 13px; }
 
@@ -1907,12 +1907,12 @@ button.btn.shot:hover {
 
 .grid-tile {
   margin: 0; display: flex; flex-direction: column;
-  border: 1px solid var(--line); border-radius: 10px;
-  overflow: hidden; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 10px;
+  overflow: hidden; background: var(--surface-1);
 }
 .grid-tile figcaption {
   display: flex; align-items: center; gap: 8px;
-  padding: 7px 10px; border-bottom: 1px solid var(--line);
+  padding: 7px 10px; border-bottom: 1px solid var(--border);
   font-size: 12px;
 }
 .grid-tile iframe {
@@ -1921,13 +1921,13 @@ button.btn.shot:hover {
   background: #111;
 }
 .grid-foot {
-  padding: 6px 10px; border-top: 1px solid var(--line);
+  padding: 6px 10px; border-top: 1px solid var(--border);
   font-size: 11px; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .grid-badge {
   padding: 2px 7px; border-radius: 999px; font-weight: 600;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
 }
 .grid-badge.is-chrome { background: color-mix(in srgb, #4285f4 14%, transparent); }
 .grid-badge.is-android { background: color-mix(in srgb, #3ddc84 16%, transparent); }
@@ -1936,7 +1936,7 @@ button.btn.shot:hover {
 .grid-empty { max-width: 56ch; display: flex; flex-direction: column; gap: 10px; }
 .grid-pre {
   margin: 0; padding: 10px 12px; border-radius: 8px;
-  border: 1px solid var(--line); background: var(--panel);
+  border: 1px solid var(--border); background: var(--surface-1);
   font-size: 12px; overflow-x: auto;
 }
 

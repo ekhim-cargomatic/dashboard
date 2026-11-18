@@ -67,6 +67,25 @@ const hostOf = (base: string): string | null => {
 
 export function DeviceGrid({ config }: Props) {
   const host = useMemo(() => hostOf(config.gridBaseUrl), [config.gridBaseUrl]);
+  /*
+   * An https page may not touch an http one. Not a policy we can set, not
+   * something a header turns off: the browser refuses the fetch and refuses
+   * the iframe, and what you get is a dead status line and eight black tiles.
+   * The requests show up as "(blocked:mixed-content)" with provisional headers
+   * and no response, which looks exactly like a host that is not answering.
+   *
+   * The grid speaks plain http -- Selenium's hub and noVNC both do, and the
+   * host has no certificate because it has no name, only an IP. So the Grid
+   * tab works from http://localhost:5173 and cannot work from the deployed
+   * dashboard over https until the grid is behind TLS.
+   *
+   * Worth naming precisely rather than letting it read as "the grid is down",
+   * because the grid is usually fine and nothing you do to it will help.
+   */
+  const blockedByMixedContent = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.location.protocol === 'https:' && config.gridBaseUrl.startsWith('http://');
+  }, [config.gridBaseUrl]);
   // noVNC wants the password in the query string. Without it `autoconnect=1`
   // stops at a prompt and the tile paints nothing at all - a 0x0 canvas rather
   // than an error, which looks exactly like a grid that is down.
@@ -82,7 +101,7 @@ export function DeviceGrid({ config }: Props) {
   const [epoch, setEpoch] = useState(0);
 
   const poll = useCallback(async () => {
-    if (!config.gridBaseUrl) return;
+    if (!config.gridBaseUrl || blockedByMixedContent) return;
     try {
       const response = await fetch(`${config.gridBaseUrl.replace(/\/$/, '')}/status`, {
         cache: 'no-store',
@@ -106,7 +125,7 @@ export function DeviceGrid({ config }: Props) {
       // when nobody is using it.
       setReachable(false);
     }
-  }, [config.gridBaseUrl]);
+  }, [config.gridBaseUrl, blockedByMixedContent]);
 
   useEffect(() => {
     void poll();
@@ -158,12 +177,19 @@ export function DeviceGrid({ config }: Props) {
   return (
     <div className="grid-wrap">
       <div className="grid-bar">
-        <span className={`grid-dot ${reachable ? 'is-up' : 'is-down'}`} aria-hidden="true" />
-        <strong>{reachable ? 'Grid ready' : 'Not reachable'}</strong>
+        <span
+          className={`grid-dot ${reachable && !blockedByMixedContent ? 'is-up' : 'is-down'}`}
+          aria-hidden="true"
+        />
+        <strong>
+          {blockedByMixedContent ? 'Blocked by the browser' : reachable ? 'Grid ready' : 'Not reachable'}
+        </strong>
         <span className="muted">
-          {reachable
-            ? `${nodes} Chrome ${nodes === 1 ? 'node' : 'nodes'} · ${busyCount} busy`
-            : 'the instance may be stopped, or your IP changed'}
+          {blockedByMixedContent
+            ? 'this page is https and the grid is http'
+            : reachable
+              ? `${nodes} Chrome ${nodes === 1 ? 'node' : 'nodes'} · ${busyCount} busy`
+              : 'the instance may be stopped, or your IP changed'}
         </span>
         <span className="grid-spacer" />
         <code className="grid-url">SELENIUM_REMOTE_URL={config.gridBaseUrl}</code>
@@ -175,17 +201,27 @@ export function DeviceGrid({ config }: Props) {
         </a>
       </div>
 
-      {!reachable && (
+      {blockedByMixedContent ? (
+        <p className="grid-hint muted">
+          Nothing is wrong with the grid. A page served over https may not fetch or
+          embed anything over plain http, so the browser refused every request on
+          this tab before it left your machine — the status above and the black
+          tiles are that refusal, not the grid being down. The hub and noVNC speak
+          http, and the host has no certificate because it has no name, only an IP.
+          Open the dashboard at <code>http://localhost:5173</code> to use the grid,
+          or put it behind TLS to use it from here.
+        </p>
+      ) : !reachable ? (
         <p className="grid-hint muted">
           Bring it up with <code>./infra/deploy-grid.sh up</code>, then{' '}
           <code>./infra/deploy-grid.sh push</code>. The public address changes on every
           stop/start, so <code>push</code> is what re-points the nodes at it — and{' '}
           <code>allow-ip</code> if you have moved network.
         </p>
-      )}
+      ) : null}
 
       <div className="grid-tiles">
-        {slots.map((slot) => (
+        {!blockedByMixedContent && slots.map((slot) => (
           <figure key={slot.key} className={`grid-tile is-${slot.kind}`}>
             <figcaption>
               <span className={`grid-badge is-${slot.kind}`}>{slot.label}</span>
