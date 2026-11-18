@@ -132,7 +132,18 @@ PORTS=(
   "6082 noVNC Android slot 2"
   "6083 noVNC Android slot 3"
   "6084 noVNC Android slot 4"
+  "443  HTTPS - the grid behind TLS, for the deployed dashboard"
 )
+
+# Port 80 is the one exception to the one-address rule.
+#
+# Let's Encrypt validates by fetching http://<domain>/.well-known/acme-challenge
+# from its own servers, which are not on anyone's allowlist, so 80 has to be
+# open to the world or no certificate is ever issued or renewed. It serves
+# nothing else -- every real route is on 443, which stays restricted like the
+# rest of the grid. Without TLS the deployed dashboard cannot reach the grid at
+# all, because an https page may not embed an http one.
+ACME_PORT=80
 
 # ---------------------------------------------------------- instance role --
 
@@ -252,7 +263,14 @@ allow_ip() {
   aws ec2 authorize-security-group-ingress --region "$REGION" \
     --group-id "$id" --ip-permissions "$perms" >/dev/null
 
-  echo "  ${#PORTS[@]} ports open to $ip/32 and nothing else" >&2
+  if [[ -n "${GRID_DOMAIN:-}" ]]; then
+    aws ec2 authorize-security-group-ingress --region "$REGION" --group-id "$id" \
+      --ip-permissions "[{\"IpProtocol\":\"tcp\",\"FromPort\":$ACME_PORT,\"ToPort\":$ACME_PORT,\"IpRanges\":[{\"CidrIp\":\"0.0.0.0/0\",\"Description\":\"ACME challenge only - Lets Encrypt validates from its own servers\"}]}]" \
+      >/dev/null 2>&1 || true
+    echo "  ${#PORTS[@]} ports open to $ip/32, plus :$ACME_PORT world-open for ACME" >&2
+  else
+    echo "  ${#PORTS[@]} ports open to $ip/32 and nothing else" >&2
+  fi
   printf '%s' "$id"
 }
 
@@ -630,13 +648,15 @@ cmd_push() {
   ip="$(public_ip "$id")"
   [[ -n "$ip" ]] || die "instance has no public address"
   compose="$(base64 < "$HERE/grid/docker-compose.yml" | tr -d '\n')"
-  local tuner
+  local tuner caddyfile
   tuner="$(base64 < "$HERE/grid/tune.sh" | tr -d '\n')"
+  caddyfile="$(base64 < "$HERE/grid/Caddyfile" | tr -d '\n')"
   script="$(cat <<EOF
 set -e
 mkdir -p /opt/qa-grid
 echo '$compose' | base64 -d > /opt/qa-grid/docker-compose.yml
-printf 'GRID_VNC_PASSWORD=%s\nGRID_PUBLIC_URL=http://$ip:4444\n' '$GRID_VNC_PASSWORD' > /opt/qa-grid/.env
+echo '$caddyfile' | base64 -d > /opt/qa-grid/Caddyfile
+printf 'GRID_VNC_PASSWORD=%s\nGRID_PUBLIC_URL=%s\nGRID_DOMAIN=%s\n' '$GRID_VNC_PASSWORD' '${GRID_DOMAIN:+https://$GRID_DOMAIN}${GRID_DOMAIN:-http://$ip:4444}' '${GRID_DOMAIN:-}' > /opt/qa-grid/.env
 chmod 600 /opt/qa-grid/.env
 cat /var/log/qa-grid-kvm.log 2>/dev/null || echo "cloud-init has not finished yet"
 echo '$tuner' | base64 -d > /opt/qa-grid/tune.sh

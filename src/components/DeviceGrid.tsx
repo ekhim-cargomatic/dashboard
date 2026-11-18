@@ -65,6 +65,30 @@ const hostOf = (base: string): string | null => {
   }
 };
 
+/**
+ * Where a slot's noVNC lives.
+ *
+ * Two shapes, because the grid can be addressed two ways. Given a bare origin
+ * (http://<ip>:4444) each slot is its own published port on the same host.
+ * Given a TLS front door (https://qa-grid.cargomatic.com) everything comes
+ * through one origin and the slot is a path, because a certificate covers a
+ * name and we did not want a wildcard -- see grid/Caddyfile.
+ *
+ * The `path` query parameter is not decoration. noVNC's javascript opens its
+ * websocket at the root unless told otherwise, so behind a path prefix it
+ * would reach for /websockify, get the hub's 404, and show a connected-looking
+ * frame that never paints.
+ */
+const vncUrl = (base: string, port: number, slot: string, auth: string): string => {
+  const tls = base.startsWith('https://');
+  const origin = base.replace(/\/$/, '');
+  if (!tls) {
+    const host = hostOf(base);
+    return `http://${host}:${port}/?autoconnect=1&resize=scale${auth}`;
+  }
+  return `${origin}/vnc/${slot}/?autoconnect=1&resize=scale&path=${encodeURIComponent(`vnc/${slot}/websockify`)}${auth}`;
+};
+
 export function DeviceGrid({ config }: Props) {
   const host = useMemo(() => hostOf(config.gridBaseUrl), [config.gridBaseUrl]);
   /*
@@ -139,7 +163,7 @@ export function DeviceGrid({ config }: Props) {
       key: `chrome-${i + 1}`,
       label: `Chrome ${i + 1}`,
       kind: 'chrome' as const,
-      view: `http://${host}:${port}/?autoconnect=1&resize=scale${auth}`,
+      view: vncUrl(config.gridBaseUrl, port, `chrome-${i + 1}`, auth),
       endpoint: `${config.gridBaseUrl} (slot ${i + 1})`,
       busy: i < busyCount,
     }));
@@ -148,8 +172,10 @@ export function DeviceGrid({ config }: Props) {
         key: `android-${i + 1}`,
         label: `${a.device} · Android ${a.os}`,
         kind: 'android',
-        view: `http://${host}:${a.novnc}/?autoconnect=1&resize=scale${auth}`,
-        endpoint: `http://${host}:${a.appium}`,
+        view: vncUrl(config.gridBaseUrl, a.novnc, `android-${i + 1}`, auth),
+        endpoint: config.gridBaseUrl.startsWith('https://')
+          ? `${config.gridBaseUrl.replace(/\/$/, '')}/appium/android-${i + 1}`
+          : `http://${host}:${a.appium}`,
         busy: false,
       });
     });

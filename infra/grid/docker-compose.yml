@@ -61,6 +61,44 @@ services:
   # push is re-run after each `up` rather than only when the compose file
   # changes.
 
+  # ----------------------------------------------------------------- tls --
+  # The only service published on 80/443. Everything else keeps its own port
+  # for direct use from an allowlisted machine; this is what lets the DEPLOYED
+  # dashboard, which is https, talk to the grid at all. See grid/Caddyfile.
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: qa-grid-caddy
+    # PARKED. Not started by anything that does not ask for it by name:
+    #
+    #   docker compose --profile tls up -d
+    #
+    # It is here because the work was done, not because it is wanted. The grid
+    # admits ONE address, so serving it over TLS from the deployed dashboard
+    # would let exactly one person -- the one who can already open
+    # localhost:5173 -- reach it from a nicer URL, in exchange for a record in
+    # a production DNS zone, port 80 open to the world, and certificate
+    # renewal as a new way to break. If the allowlist is ever widened to a VPN
+    # or office range, this becomes worth switching on; until then it costs
+    # more than it returns.
+    #
+    # A profile rather than a comment because the alternative, GRID_DOMAIN as
+    # a required variable, meant every `push` failed until someone set a
+    # domain they had decided not to use.
+    profiles: ["tls"]
+    depends_on: [hub]
+    ports:
+      - "80:80"     # ACME challenge only, and must be open to the world for it
+      - "443:443"
+    environment:
+      GRID_DOMAIN: ${GRID_DOMAIN:-qa-grid.invalid}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates survive a recreate. Without this every `push` would ask
+      # Let's Encrypt for a new one and walk into the five-per-week limit.
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
   # ------------------------------------------------------------------ hub --
   # The one address the suite talks to. Playwright reads SELENIUM_REMOTE_URL
   # and launches Chrome *through* here, so features/environment.py keeps
@@ -382,3 +420,7 @@ services:
       timeout: 15s
       retries: 3
       start_period: 300s
+
+volumes:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,91 @@
+# TLS in front of the grid, so the deployed dashboard can talk to it.
+#
+# WHY THIS EXISTS
+#
+# A page served over https may not fetch or embed anything over plain http.
+# The browser refuses before the request leaves the machine, so the Grid tab on
+# https://qa-dashboard.cargomatic.com got a dead status line and black tiles
+# while the grid itself was perfectly healthy. Neither Selenium's hub nor noVNC
+# speaks https, and a certificate needs a NAME -- which is why the grid now has
+# one instead of being addressed by IP.
+#
+# Caddy gets and renews the certificate from Let's Encrypt by itself. That
+# needs port 80 reachable from anywhere, because the ACME challenge arrives
+# from Let's Encrypt's servers and they are not on your allowlist. Port 80
+# serves nothing else: every real route is on 443, which stays restricted to
+# one address like the rest of the grid. TLS is here to satisfy the browser,
+# not to replace the security group.
+#
+# ROUTING
+#
+# One name, paths underneath, rather than a subdomain per slot -- a wildcard
+# certificate would need a DNS-01 challenge, which would mean Route53
+# credentials sitting on a box that runs a browser anyone on the allowlist can
+# drive by hand. Not worth it for eight tiles.
+#
+#   /                     the Selenium hub (status, /ui, sessions, CDP)
+#   /vnc/<slot>/          that slot's noVNC
+#
+# noVNC's javascript asks for its websocket at the ROOT by default, which
+# would 404 under a path prefix. It reads an override from the query string,
+# so the dashboard appends `?path=vnc/<slot>/websockify` -- see DeviceGrid.tsx.
+
+{
+	email qa@cargomatic.com
+	# Staging CA while proving this out would avoid Let's Encrypt's rate limit
+	# on repeated failures; left commented because the limit only bites after
+	# five failures a week and a staging cert is one the browser rejects.
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$GRID_DOMAIN} {
+	# Each slot's noVNC. handle_path strips the prefix, so chrome-1:7900 sees
+	# "/" and serves its own assets normally.
+	handle_path /vnc/chrome-1/* {
+		reverse_proxy chrome-1:7900
+	}
+	handle_path /vnc/chrome-2/* {
+		reverse_proxy chrome-2:7900
+	}
+	handle_path /vnc/chrome-3/* {
+		reverse_proxy chrome-3:7900
+	}
+	handle_path /vnc/chrome-4/* {
+		reverse_proxy chrome-4:7900
+	}
+	handle_path /vnc/android-1/* {
+		reverse_proxy android-1:6080
+	}
+	handle_path /vnc/android-2/* {
+		reverse_proxy android-2:6080
+	}
+	handle_path /vnc/android-3/* {
+		reverse_proxy android-3:6080
+	}
+	handle_path /vnc/android-4/* {
+		reverse_proxy android-4:6080
+	}
+
+	# Appium, one path per slot, for a suite that would rather use a name than
+	# an IP and a port. appium-automation keeps working against the raw ports;
+	# these are additive.
+	handle_path /appium/android-1/* {
+		reverse_proxy android-1:4723
+	}
+	handle_path /appium/android-2/* {
+		reverse_proxy android-2:4723
+	}
+	handle_path /appium/android-3/* {
+		reverse_proxy android-3:4723
+	}
+	handle_path /appium/android-4/* {
+		reverse_proxy android-4:4723
+	}
+
+	# Everything else is the hub: /status, /ui, /session/... and the CDP
+	# websocket Playwright upgrades to. reverse_proxy carries websockets
+	# without being told to.
+	handle {
+		reverse_proxy hub:4444
+	}
+}

@@ -177,19 +177,19 @@ export default function App() {
   // from the deployed config.json (see AppConfig.gridBaseUrl), so the tab is
   // invisible on CloudFront whatever the flag says. Gating it a second time
   // only meant typing ?qa=1 to reach a grid that is plainly configured.
-  // The flow map stays behind ?qa=1; the Grid tab does not.
+  // Both internal views sit behind ?qa=1, and the grid needs a grid as well.
   //
-  // They are hidden for different reasons. The map is an internal working view
-  // that happens to be served from a public bucket, so the flag is what keeps
-  // it out of the way of anyone reading the runs. The grid gates itself on
-  // gridBaseUrl instead, which is only set once a grid exists to point at -- a
-  // flag on top of that just meant typing a query string to reach a tab that
-  // was going to work anyway.
+  // The grid was briefly ungated, on the reasoning that gridBaseUrl already
+  // hid it. True, but it hid it from everyone except the one machine on the
+  // allowlist -- and on the deployed dashboard, which is https, the tab could
+  // not work at all: a browser will not let an https page embed the grid's
+  // plain http. So an ungated tab was a tab most people could not use and the
+  // rest could not reach. The flag is the honest place for it.
   const hasGrid = Boolean(config?.gridBaseUrl);
   const views: Tab[] = [
     'runs',
     ...(flags.qa ? (['flow'] as Tab[]) : []),
-    ...(hasGrid ? (['grid'] as Tab[]) : []),
+    ...(flags.qa && hasGrid ? (['grid'] as Tab[]) : []),
   ];
   const tabLabel = (t: Tab) => (t === 'runs' ? 'Runs' : t === 'flow' ? 'App flow' : 'Grid');
 
@@ -212,7 +212,7 @@ export default function App() {
   // Same shell as the flow map: full-bleed, its own data source, and not behind
   // the run-loading gates — a bucket that will not list should not hide a grid
   // that is running perfectly well.
-  if ((flags.qa && tab === 'flow') || (hasGrid && tab === 'grid')) {
+  if (flags.qa && (tab === 'flow' || (hasGrid && tab === 'grid'))) {
     return (
       <div className="app is-full">
         <header className="topbar">
@@ -220,12 +220,8 @@ export default function App() {
             <h1>QA Automation Dashboard</h1>
             <p className="brand-meta">
               {tab === 'grid' ? 'Device grid' : 'App flow map'}
-              {tab === 'flow' && (
-                <>
-                  <span className="sep" aria-hidden="true">·</span>
-                  behind <code>?qa=1</code>
-                </>
-              )}
+              <span className="sep" aria-hidden="true">·</span>
+              behind <code>?qa=1</code>
             </p>
           </div>
           <div className="topbar-controls">
