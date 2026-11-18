@@ -172,13 +172,21 @@ export default function App() {
   // The flow map is its own data source (public/qa-flow/), so it must not sit
   // behind the run-loading gates below — an unreachable bucket should not take
   // the map down with it.
-  // The Grid tab appears only when a grid is configured, which only happens in
-  // a local config.json — see AppConfig.gridBaseUrl for why it is never in the
-  // deployed one.
-  const views: Tab[] = ['runs', 'flow', ...(config?.gridBaseUrl ? (['grid'] as Tab[]) : [])];
+  // The Grid tab is NOT behind ?qa=1. It does not need to be: it already shows
+  // itself only when gridBaseUrl is set, and that key is deliberately absent
+  // from the deployed config.json (see AppConfig.gridBaseUrl), so the tab is
+  // invisible on CloudFront whatever the flag says. Gating it a second time
+  // only meant typing ?qa=1 to reach a grid that is plainly configured.
+  const hasGrid = Boolean(config?.gridBaseUrl);
+  const views: Tab[] = [
+    'runs',
+    ...(flags.qa ? (['flow'] as Tab[]) : []),
+    ...(hasGrid ? (['grid'] as Tab[]) : []),
+  ];
   const tabLabel = (t: Tab) => (t === 'runs' ? 'Runs' : t === 'flow' ? 'App flow' : 'Grid');
 
-  const tabs = flags.qa ? (
+  // Shown whenever there is more than one place to go.
+  const tabs = views.length > 1 ? (
     <div className="segmented" role="group" aria-label="View">
       {views.map((option) => (
         <button
@@ -196,7 +204,7 @@ export default function App() {
   // Same shell as the flow map: full-bleed, its own data source, and not behind
   // the run-loading gates — a bucket that will not list should not hide a grid
   // that is running perfectly well.
-  if (flags.qa && (tab === 'flow' || tab === 'grid')) {
+  if ((flags.qa && tab === 'flow') || (hasGrid && tab === 'grid')) {
     return (
       <div className="app is-full">
         <header className="topbar">
@@ -204,8 +212,12 @@ export default function App() {
             <h1>QA Automation Dashboard</h1>
             <p className="brand-meta">
               {tab === 'grid' ? 'Device grid' : 'App flow map'}
-              <span className="sep" aria-hidden="true">·</span>
-              behind <code>?qa=1</code>
+              {tab === 'flow' && (
+                <>
+                  <span className="sep" aria-hidden="true">·</span>
+                  behind <code>?qa=1</code>
+                </>
+              )}
             </p>
           </div>
           <div className="topbar-controls">
