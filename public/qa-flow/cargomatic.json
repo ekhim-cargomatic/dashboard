@@ -6877,12 +6877,21 @@
      "kind": "field",
      "parent": "sh.step.route",
      "name": "Stop 1 location name",
-     "control": "text",
+     "control": "combobox",
      "required": true,
-     "selector": "div.mb-6.grid:has(input[placeholder=\"Start typing to search for a location...\"]) >> nth=0 >> input[placeholder*=\"location name\" i]",
-     "source": "BookingPage.STOP_LOCATION_NAME_INPUT",
+     "selector": "[id=\"1-name\"]",
+     "source": "booking/v2/Location.js SearchBox id={sequence}-name",
      "sample": "Long Beach",
-     "sampleSource": "BookingPage.fill_stop \u2014 the stops the suite books with"
+     "sampleSource": "BookingPage.fill_stop \u2014 the stops the suite books with",
+     "then": [
+      {
+       "action": "pickSuggestionIfPresent",
+       "selector": "div.mb-6.grid:has(input[placeholder=\"Start typing to search for a location...\"]) >> nth=0 >> div.absolute.left-0.bg-white.shadow-lg a.list-group-item",
+       "source": "v2/dropdowns/Menu.js renderMenu + createRenderItem a.list-group-item",
+       "timeoutMs": 4000
+      }
+     ],
+     "note": "Location Name is an autocomplete over the shipper's saved locations, not a plain text box. Its menu is absolutely positioned over the Address field below, so leaving it open made the next click time out on a visible, single-match element. IfPresent because a name that matches no saved location is still a valid name."
     },
     {
      "id": "sh.stop1.address",
@@ -6933,12 +6942,21 @@
      "kind": "field",
      "parent": "sh.step.route",
      "name": "Stop 2 location name",
-     "control": "text",
+     "control": "combobox",
      "required": true,
-     "selector": "div.mb-6.grid:has(input[placeholder=\"Start typing to search for a location...\"]) >> nth=1 >> input[placeholder*=\"location name\" i]",
-     "source": "BookingPage.STOP_LOCATION_NAME_INPUT",
+     "selector": "[id=\"2-name\"]",
+     "source": "booking/v2/Location.js SearchBox id={sequence}-name",
      "sample": "Washington",
-     "sampleSource": "BookingPage.fill_stop \u2014 the stops the suite books with"
+     "sampleSource": "BookingPage.fill_stop \u2014 the stops the suite books with",
+     "then": [
+      {
+       "action": "pickSuggestionIfPresent",
+       "selector": "div.mb-6.grid:has(input[placeholder=\"Start typing to search for a location...\"]) >> nth=1 >> div.absolute.left-0.bg-white.shadow-lg a.list-group-item",
+       "source": "v2/dropdowns/Menu.js renderMenu + createRenderItem a.list-group-item",
+       "timeoutMs": 4000
+      }
+     ],
+     "note": "Location Name is an autocomplete over the shipper's saved locations, not a plain text box. Its menu is absolutely positioned over the Address field below, so leaving it open made the next click time out on a visible, single-match element. IfPresent because a name that matches no saved location is still a valid name."
     },
     {
      "id": "sh.stop2.address",
@@ -8558,7 +8576,15 @@
      "control": "combobox",
      "selector": "[role=\"combobox\"]",
      "source": "UVFilters.OPERATOR_BUTTON",
-     "fromList": true
+     "fromList": true,
+     "then": [
+      {
+       "action": "pickSuggestion",
+       "selector": "[ref=\"eDisplayField\"], [role=\"option\"]",
+       "source": "UVFilters.OPERATOR_OPTION"
+      }
+     ],
+     "note": "Typing opens a suggestion list that must be clicked; leaving it open also covers whatever sits below it."
     },
     {
      "id": "uv.filters.text",
@@ -11961,7 +11987,15 @@
      "name": "Carrier",
      "control": "combobox",
      "selector": "input[placeholder='Search for Carrier']",
-     "source": "ViewOrdersPage.CARRIER_FILTER_INPUT"
+     "source": "ViewOrdersPage.CARRIER_FILTER_INPUT",
+     "then": [
+      {
+       "action": "pickSuggestion",
+       "selector": "[data-testid='customer-search'] a[role='menuitem'], a.list-group-item[role='menuitem'], [placeholder='Search for Carrier'] + div a[role='menuitem'], [placeholder='Search for Carrier'] + div [role='menuitem'] div, div[role='listbox'] [role='option']",
+       "source": "ViewOrdersPage.CARRIER_FILTER_SUGGESTION_ITEM"
+      }
+     ],
+     "note": "Typing opens a suggestion list that must be clicked; leaving it open also covers whatever sits below it."
     },
     {
      "id": "vo.filter.equipment",
@@ -11971,7 +12005,15 @@
      "control": "combobox",
      "selector": "input[placeholder='Search for equipment']",
      "source": "ViewOrdersPage.EQUIPMENT_FILTER_INPUT",
-     "fromList": true
+     "fromList": true,
+     "then": [
+      {
+       "action": "pickSuggestion",
+       "selector": "[placeholder='Search for equipment'] + div > a",
+       "source": "ViewOrdersPage.EQUIPMENT_FILTER_SUGGESTION_ITEM"
+      }
+     ],
+     "note": "Typing opens a suggestion list that must be clicked; leaving it open also covers whatever sits below it."
     },
     {
      "id": "vo.filter.ar",
@@ -12124,7 +12166,15 @@
        "debounced": true,
        "confidence": "route-table"
       }
-     }
+     },
+     "then": [
+      {
+       "action": "pickSuggestion",
+       "selector": "[data-testid=\"customer-search\"] a[role='menuitem'], [data-testid=\"customer-search\"] [role='option'], [data-testid=\"customer-search\"] a, [data-testid=\"customer-search\"] button",
+       "source": "OrderDetailsPage.CARRIER_SEARCH_RESULTS"
+      }
+     ],
+     "note": "Typing opens a suggestion list that must be clicked; leaving it open also covers whatever sits below it."
     },
     {
      "id": "od.carrier.save",
@@ -17699,7 +17749,15 @@
      "source": "UsersPage.DRIVER_CARRIER_SEARCH",
      "parent": "us.driver",
      "control": "autocomplete",
-     "required": true
+     "required": true,
+     "then": [
+      {
+       "action": "pickSuggestion",
+       "selector": "div[role=\"listbox\"] div[role=\"option\"]",
+       "source": "UsersPage.DRIVER_CARRIER_SEARCH_RESULTS"
+      }
+     ],
+     "note": "Typing opens a suggestion list that must be clicked; leaving it open also covers whatever sits below it."
     },
     {
      "id": "us.driver.carrierPick",
@@ -18098,7 +18156,15 @@
      "selector": "#customer-search-admin",
      "source": "AdminUsersPage.NAV_CUSTOMER_SEARCH",
      "parent": "us.admin",
-     "control": "autocomplete"
+     "control": "autocomplete",
+     "then": [
+      {
+       "action": "pickSuggestion",
+       "selector": "[data-testid=\"customer-search\"] a[role=\"menuitem\"]",
+       "source": "AdminUsersPage.NAV_CUSTOMER_SEARCH_RESULTS"
+      }
+     ],
+     "note": "Typing opens a suggestion list that must be clicked; leaving it open also covers whatever sits below it."
     },
     {
      "id": "us.admin.customerResults",
@@ -18489,7 +18555,15 @@
      "name": "Carrier search",
      "selector": "[data-testid=\"customer-search\"]",
      "source": "OrderDetailsPage.CARRIER_SEARCH_ROOT",
-     "control": "autocomplete"
+     "control": "autocomplete",
+     "then": [
+      {
+       "action": "pickSuggestion",
+       "selector": "[data-testid=\"customer-search\"] a[role='menuitem'], [data-testid=\"customer-search\"] [role='option'], [data-testid=\"customer-search\"] a, [data-testid=\"customer-search\"] button",
+       "source": "OrderDetailsPage.CARRIER_SEARCH_RESULTS"
+      }
+     ],
+     "note": "Typing opens a suggestion list that must be clicked; leaving it open also covers whatever sits below it."
     },
     {
      "id": "o1.carrier.results",
@@ -20240,7 +20314,15 @@
      "name": "Customer search",
      "selector": "[data-testid=\"customer-search\"] input#customer-search-admin",
      "source": "ShipperProfilePage.CUSTOMER_SEARCH_INPUT",
-     "control": "autocomplete"
+     "control": "autocomplete",
+     "then": [
+      {
+       "action": "pickSuggestion",
+       "selector": "[data-testid=\"customer-search\"] .absolute.left-0.bg-white.shadow-lg a[role=\"menuitem\"]",
+       "source": "ShipperProfilePage.CUSTOMER_SEARCH_RESULTS"
+      }
+     ],
+     "note": "Typing opens a suggestion list that must be clicked; leaving it open also covers whatever sits below it."
     },
     {
      "id": "sh.search.results",
@@ -21410,7 +21492,15 @@
      "name": "Customer search",
      "selector": "[data-testid=\"customer-search\"] input#customer-search-admin",
      "source": "CarrierProfilePage.CUSTOMER_SEARCH_INPUT",
-     "control": "autocomplete"
+     "control": "autocomplete",
+     "then": [
+      {
+       "action": "pickSuggestion",
+       "selector": "[data-testid=\"customer-search\"] .absolute.left-0.bg-white.shadow-lg a[role=\"menuitem\"], [data-testid=\"customer-search\"] .absolute.bg-white.shadow-lg a[role=\"menuitem\"], [data-testid=\"customer-search\"] .absolute.bg-white.shadow-lg a.list-group-item, [data-testid=\"customer-search\"] [role=\"option\"]",
+       "source": "CarrierProfilePage.CUSTOMER_SEARCH_RESULTS"
+      }
+     ],
+     "note": "Typing opens a suggestion list that must be clicked; leaving it open also covers whatever sits below it."
     },
     {
      "id": "cf.search.dropdown",
@@ -23689,7 +23779,15 @@
      "selector": "#customer-search-input",
      "source": "ShipmentBookingDetailsPage.ASSIGN_SEARCH_INPUT",
      "parent": "bd.assign",
-     "control": "autocomplete"
+     "control": "autocomplete",
+     "then": [
+      {
+       "action": "pickSuggestion",
+       "selector": "[data-testid='search-box'] a[role='menuitem']",
+       "source": "ShipmentBookingDetailsPage.ASSIGN_SEARCH_ITEM"
+      }
+     ],
+     "note": "Typing opens a suggestion list that must be clicked; leaving it open also covers whatever sits below it."
     },
     {
      "id": "bd.assign.item",
@@ -27138,7 +27236,15 @@
      "name": "Assign shippers",
      "control": "combobox",
      "selector": "div[role=\"tabpanel\"][id$=\"-content-shippers\"][data-state=\"active\"] [data-testid=\"customer-search\"] input[role=\"combobox\"]",
-     "source": "TariffEditorModal.SHIPPERS_SEARCH_INPUT"
+     "source": "TariffEditorModal.SHIPPERS_SEARCH_INPUT",
+     "then": [
+      {
+       "action": "pickSuggestion",
+       "selector": ".absolute.bg-white.shadow-lg a[role=\"menuitem\"].list-group-item",
+       "source": "TariffEditorModal.SHIPPERS_SEARCH_RESULTS"
+      }
+     ],
+     "note": "Typing opens a suggestion list that must be clicked; leaving it open also covers whatever sits below it."
     },
     {
      "id": "pr.tariff.assign",

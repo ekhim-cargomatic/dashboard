@@ -401,8 +401,16 @@ function stepFor(ix, node, why, run, overrides) {
   // typeahead in this app draws its own, so there is no generic option selector
   // worth guessing at — and guessing produced a timeout that named the input
   // rather than the list, which sent me looking in the wrong place entirely.
+  // `timeoutMs` only rides along for the `...IfPresent` follows, where not
+  // appearing is one of the outcomes and the wait is therefore a budget rather
+  // than a deadline. Dropping it here left the runner on its own default, so
+  // tuning the number in the map changed nothing.
   if (node.then?.length) {
-    base.follow = node.then.map((f) => ({ action: f.action, selector: f.selector }));
+    base.follow = node.then.map((f) => ({
+      action: f.action,
+      selector: f.selector,
+      ...(f.timeoutMs ? { timeoutMs: f.timeoutMs } : {}),
+    }));
   }
 
   if (node.kind === 'page') return { ...base, verb: 'goto', path: node.path, selector: undefined };

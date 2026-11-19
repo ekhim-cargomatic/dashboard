@@ -414,14 +414,28 @@ def perform(page, step: dict, config: dict, variables: dict) -> str:
         # A typeahead fires per keystroke; the list is not the list until it settles.
         page.wait_for_timeout(step.get("settleMs") or 1200)
         for follow in step.get("follow") or []:
+            action = follow.get("action") or ""
             nxt = page.locator(follow["selector"]).first
-            if follow.get("action") == "type":
+            if action == "type":
                 ready(nxt, label=f"{step['name']} input")
                 nxt.fill(value or "")
                 page.wait_for_timeout(step.get("settleMs") or 1200)
-            else:
-                ready(nxt, label=f"{step['name']} suggestion list")
+                continue
+            # An ...IfPresent follow is one the form may or may not show: a
+            # saved-location list that has no match, a confirm dialog that only
+            # appears on an ambiguous address. Waiting the full timeout and
+            # then failing is wrong — not appearing IS one of its outcomes.
+            if action.endswith("IfPresent"):
+                try:
+                    nxt.wait_for(state="visible", timeout=follow.get("timeoutMs", 4000))
+                except PlaywrightTimeout:
+                    log(f"     {step['name']}: no {action[:-9]} appeared, carrying on")
+                    continue
                 nxt.click()
+                page.wait_for_timeout(step.get("settleMs") or 600)
+                continue
+            ready(nxt, label=f"{step['name']} suggestion list")
+            nxt.click()
         return f"picked an option for {step['name']}"
 
     if verb in ("click", "clickMenuItem", "clickTab"):
