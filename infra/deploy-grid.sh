@@ -546,7 +546,7 @@ cmd_restart() {
   id="$(instance_id)" || true
   [[ -n "$id" ]] || die "no instance"
   if [[ "$what" == "all" ]]; then
-    script="cd /opt/qa-grid && docker compose up -d --force-recreate"
+    script="cd /opt/qa-grid && docker compose ${GRID_DOMAIN:+--profile tls} up -d --force-recreate"
   elif [[ "$what" =~ ^(android|chrome)-[1-4]$ ]]; then
     script="cd /opt/qa-grid && docker compose up -d --force-recreate $what"
   else
@@ -676,7 +676,7 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now qa-grid-tuner.service
 systemctl restart qa-grid-tuner.service
-cd /opt/qa-grid && docker compose up -d --force-recreate
+cd /opt/qa-grid && docker compose ${GRID_DOMAIN:+--profile tls} up -d --force-recreate
 docker compose ps --format '{{.Name}}\t{{.Status}}'
 EOF
   )"
