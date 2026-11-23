@@ -112,11 +112,14 @@ DIST_ID="$(aws cloudfront list-distributions \
 [[ "$DIST_ID" == "None" ]] && DIST_ID=''
 
 if [[ -z "${ALLOWED_ORIGIN:-}" ]]; then
-  DIST_DOMAIN="$(aws cloudfront list-distributions \
-    --query "DistributionList.Items[?Comment=='qa-dashboard-${BUCKET}'].DomainName | [0]" \
-    --output text 2>/dev/null || echo 'None')"
-  [[ "$DIST_DOMAIN" != "None" && -n "$DIST_DOMAIN" ]] && ALLOWED_ORIGIN="https://${DIST_DOMAIN}"
+  DIST_ORIGINS="$(aws cloudfront list-distributions \
+    --query "DistributionList.Items[?Comment=='qa-dashboard-${BUCKET}'].[DomainName, Aliases.Items[]][]" \
+    --output text 2>/dev/null | tr '\t' '\n' | sed '/^None$/d;/^$/d;s|^|https://|' | paste -sd, -)"
+  [[ -n "$DIST_ORIGINS" ]] && ALLOWED_ORIGIN="$DIST_ORIGINS"
 fi
+
+# The first of them is the address the closing banner prints.
+PRIMARY_ORIGIN="${ALLOWED_ORIGIN%%,*}"
 
 if [[ "$MODE" == all && -z "${ALLOWED_ORIGIN:-}" ]]; then
   echo "error: ALLOWED_ORIGIN is not set and no distribution was found." >&2
@@ -527,7 +530,7 @@ Done.
   Tests         s3://${SRC_BUCKET}/${SRC_KEY}  (private)
   Runner        s3://${SRC_BUCKET}/flow/run_plan.py
   Plans         s3://${SRC_BUCKET}/plans/  (written by the function, read by the build)
-  Reached at    ${ALLOWED_ORIGIN:-<origin>}/api/run-flow
+  Reached at    ${PRIMARY_ORIGIN:-<origin>}/api/run-flow
 
 Which points on the map can be run, and why the rest cannot:
 
@@ -548,7 +551,7 @@ sign in and check the nav rendered, and no write beyond the login itself:
 
   curl -s -X POST -H 'content-type: application/json' \\
     -d '{"target":"auth.nav","env":"staging"}' \\
-    ${ALLOWED_ORIGIN:-<origin>}/api/run-flow
+    ${PRIMARY_ORIGIN:-<origin>}/api/run-flow
   aws s3 ls s3://${BUCKET}/runs/flow-run/
 
 The function resolves the plan itself, so a build cannot be started by hand

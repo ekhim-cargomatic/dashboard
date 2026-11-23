@@ -86,12 +86,15 @@ fi
 # it cannot drift from where the dashboard is actually served.
 if [[ -z "${ALLOWED_ORIGIN:-}" ]]; then
   if [[ -n "${BUCKET:-}" ]]; then
-    DIST_DOMAIN="$(aws cloudfront list-distributions \
-      --query "DistributionList.Items[?Comment=='qa-dashboard-${BUCKET}'].DomainName | [0]" \
-      --output text 2>/dev/null || echo 'None')"
-    [[ "$DIST_DOMAIN" != "None" && -n "$DIST_DOMAIN" ]] && ALLOWED_ORIGIN="https://${DIST_DOMAIN}"
+    DIST_ORIGINS="$(aws cloudfront list-distributions \
+      --query "DistributionList.Items[?Comment=='qa-dashboard-${BUCKET}'].[DomainName, Aliases.Items[]][]" \
+      --output text 2>/dev/null | tr '\t' '\n' | sed '/^None$/d;/^$/d;s|^|https://|' | paste -sd, -)"
+    [[ -n "$DIST_ORIGINS" ]] && ALLOWED_ORIGIN="$DIST_ORIGINS"
   fi
 fi
+
+# The first of them is the address the closing banner prints.
+PRIMARY_ORIGIN="${ALLOWED_ORIGIN%%,*}"
 
 if [[ "$CODE_ONLY" == false && -z "${ALLOWED_ORIGIN:-}" ]]; then
   echo "error: ALLOWED_ORIGIN is not set and no distribution was found." >&2
@@ -235,7 +238,7 @@ Done.
 
   Function     $FN_NAME  ($REGION)
   HTTP API     $API_ID  ($API_DOMAIN)
-  Reached at   ${ALLOWED_ORIGIN:-<origin>}/api/notion-task
+  Reached at   ${PRIMARY_ORIGIN:-<origin>}/api/notion-task
   Tasks DB     $NOTION_TASKS_DB_ID
   Assignee     $NOTION_ASSIGNEE_ID
 

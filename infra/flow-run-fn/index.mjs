@@ -44,12 +44,12 @@
  *   PROJECT_NAME     (required) the CodeBuild project to start
  *   PLAN_BUCKET      (required) private bucket the resolved plan is handed over in
  *   DASHBOARD_BUCKET (required) passed through to the build for the upload
- *   ALLOWED_ORIGIN   (required) exact origin allowed to call this
+ *   ALLOWED_ORIGIN   (required) comma-separated origins allowed to call this
  *   DASHBOARD_TOKEN  (optional) if set, callers must send x-dashboard-token
  *   AWS_REGION       (provided by Lambda) used to build the console log link
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import {
   BatchGetBuildsCommand,
   CodeBuildClient,
@@ -87,8 +87,10 @@ const MAP_SOURCES = ['./cargomatic.json', '../../public/qa-flow/cargomatic.json'
 
 function loadFlow() {
   for (const rel of MAP_SOURCES) {
+    const url = new URL(rel, import.meta.url);
     try {
-      return JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
+      const flow = JSON.parse(readFileSync(url, 'utf8'));
+      return { flow, url, mtimeMs: statSync(url).mtimeMs };
     } catch (err) {
       if (err.code !== 'ENOENT') throw err;
     }
@@ -96,8 +98,30 @@ function loadFlow() {
   throw new Error(`No flow map found. Looked for: ${MAP_SOURCES.join(', ')}`);
 }
 
-const flow = loadFlow();
-const ix = indexFlow(flow);
+let loaded = loadFlow();
+let ix = indexFlow(loaded.flow);
+
+/**
+ * The index, re-reading the map if the file on disk has changed.
+ *
+ * Deployed, the map is baked into the package and never moves, so this is one
+ * stat per request and the same object every time. Locally it is the
+ * difference between editing the map and re-running, and editing the map,
+ * forgetting the server read it at import time, and spending a run watching
+ * the old plan execute — which reads as "my fix did not work" rather than
+ * "nothing reloaded it".
+ */
+function currentIndex() {
+  try {
+    const mtimeMs = statSync(loaded.url).mtimeMs;
+    if (mtimeMs !== loaded.mtimeMs) {
+      loaded = loadFlow();
+      ix = indexFlow(loaded.flow);
+      console.log(`flow map reloaded (${loaded.url.pathname})`);
+    }
+  } catch { /* unreadable now: keep serving the map already in memory */ }
+  return ix;
+}
 
 /** Log lines returned per poll. A behave run prints a few hundred; this keeps
  *  one slow poll from returning a megabyte. */
@@ -143,6 +167,10 @@ const corsHeaders = (origin) => ({
   'Access-Control-Allow-Origin': origin,
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'content-type, x-dashboard-token',
+  // The echoed origin depends on the request's, so anything caching this must
+  // key on it. /api/* is CachingDisabled today; this keeps that from being
+  // load-bearing. The Notion function already says so.
+  Vary: 'Origin',
 });
 
 const reply = (statusCode, body, origin) => ({
@@ -231,7 +259,7 @@ async function start(event, origin) {
   // Resolved here, never taken from the caller. A plan the resolver refuses to
   // build is one the runner must not be handed.
   const run = String(Date.now()).slice(-4);
-  const plan = buildPlan(ix, target, { run, values });
+  const plan = buildPlan(currentIndex(), target, { run, values });
   if (plan.error) return reply(404, { error: plan.error }, origin);
   if (!plan.runnable) {
     return reply(409, { error: 'This step cannot be run yet.', blockers: plan.blockers }, origin);
@@ -284,7 +312,7 @@ function preview(event, origin) {
   if (!NODE_ID.test(target) || target.length > 80) {
     return reply(400, { error: 'plan must be a flow node id.' }, origin);
   }
-  const plan = buildPlan(ix, target, { run: '0000' });
+  const plan = buildPlan(currentIndex(), target, { run: '0000' });
   if (plan.error) return reply(404, { error: plan.error }, origin);
   return reply(200, {
     target: plan.target,
@@ -366,15 +394,22 @@ async function status(event, origin) {
 }
 
 export const handler = async (event) => {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || '';
+  // A comma-separated LIST, because one distribution answers to more than one
+  // name: its own *.cloudfront.net domain and every alias on it. Deriving only
+  // the DomainName meant the dashboard worked on the cloudfront URL and 403'd
+  // on qa-dashboard.cargomatic.com — which is the name people actually type.
+  const allowedOrigins = (process.env.ALLOWED_ORIGIN || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const requestOrigin = event.headers?.origin || event.headers?.Origin || '';
   const method = event.requestContext?.http?.method || 'POST';
 
   // Only ever echo an origin we actually allow, so the browser refuses anything else.
-  const echoOrigin = requestOrigin && requestOrigin === allowedOrigin ? requestOrigin : allowedOrigin;
+  const echoOrigin = allowedOrigins.includes(requestOrigin) ? requestOrigin : (allowedOrigins[0] || '');
 
   if (method === 'OPTIONS') return { statusCode: 204, headers: corsHeaders(echoOrigin), body: '' };
-  if (allowedOrigin && requestOrigin && requestOrigin !== allowedOrigin) {
+  if (allowedOrigins.length && requestOrigin && !allowedOrigins.includes(requestOrigin)) {
     return reply(403, { error: 'Origin not allowed' }, echoOrigin);
   }
 

@@ -19,7 +19,7 @@
  * Environment:
  *   NOTION_TOKEN        (required) internal integration secret, shared with Tasks
  *   NOTION_TASKS_DB_ID  (required) Tasks database id
- *   ALLOWED_ORIGIN      (required) exact origin allowed to call this, e.g.
+ *   ALLOWED_ORIGIN      (required) comma-separated origins allowed to call this, e.g.
  *                       https://d34o4mvhjdaxkf.cloudfront.net
  *   DASHBOARD_TOKEN     (optional) if set, callers must send it as
  *                       x-dashboard-token. See the security note in the README:
@@ -347,17 +347,24 @@ const reply = (statusCode, body, origin) => ({
 });
 
 export const handler = async (event) => {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || '';
+  // A comma-separated LIST, because one distribution answers to more than one
+  // name: its own *.cloudfront.net domain and every alias on it. Deriving only
+  // the DomainName meant the dashboard worked on the cloudfront URL and 403'd
+  // on qa-dashboard.cargomatic.com — which is the name people actually type.
+  const allowedOrigins = (process.env.ALLOWED_ORIGIN || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const requestOrigin = event.headers?.origin || event.headers?.Origin || '';
   const method = event.requestContext?.http?.method || 'POST';
 
   // Only ever echo an origin we actually allow, so the browser refuses anything else.
-  const echoOrigin = requestOrigin && requestOrigin === allowedOrigin ? requestOrigin : allowedOrigin;
+  const echoOrigin = allowedOrigins.includes(requestOrigin) ? requestOrigin : (allowedOrigins[0] || '');
 
   if (method === 'OPTIONS') return { statusCode: 204, headers: corsHeaders(echoOrigin), body: '' };
   if (method !== 'POST') return reply(405, { error: 'Method not allowed' }, echoOrigin);
 
-  if (allowedOrigin && requestOrigin && requestOrigin !== allowedOrigin) {
+  if (allowedOrigins.length && requestOrigin && !allowedOrigins.includes(requestOrigin)) {
     return reply(403, { error: 'Origin not allowed' }, echoOrigin);
   }
 
