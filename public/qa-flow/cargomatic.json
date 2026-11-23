@@ -6617,8 +6617,9 @@
      "parent": "sh.step.dispatch",
      "name": "Next",
      "action": "click",
-     "selector": "button.button-green:has(span:text-is(\"Next\"))",
-     "source": "BookingPage.DISPATCH_NEXT_BUTTON"
+     "selector": "div.form-actions button.button-green:not(.button-with-icon)",
+     "source": "booking/v2/Booking.js renderStepButtons \u2014 one Next shared by every step",
+     "note": "Matched on the button, not its label. While a step is computing, Booking.js swaps the \"Next\" span for a <Spinner>, so a text selector drops to zero matches exactly when the plan wants to click. The disabled attribute is still there, so Playwright waits it out."
     },
     {
      "id": "sh.step.load",
@@ -6800,8 +6801,9 @@
      "parent": "sh.step.load",
      "name": "Next",
      "action": "click",
-     "selector": "button.button-green:has(span:text-is(\"Next\"))",
-     "source": "BookingPage.LOAD_NEXT_BUTTON"
+     "selector": "div.form-actions button.button-green:not(.button-with-icon)",
+     "source": "booking/v2/Booking.js renderStepButtons \u2014 one Next shared by every step",
+     "note": "Matched on the button, not its label. While a step is computing, Booking.js swaps the \"Next\" span for a <Spinner>, so a text selector drops to zero matches exactly when the plan wants to click. The disabled attribute is still there, so Playwright waits it out."
     },
     {
      "id": "sh.step.acc",
@@ -6827,8 +6829,9 @@
      "parent": "sh.step.acc",
      "name": "Next",
      "action": "click",
-     "selector": "button.button-green:has(span:text-is(\"Next\"))",
-     "source": "BookingPage.ACCESSORIALS_NEXT_BUTTON"
+     "selector": "div.form-actions button.button-green:not(.button-with-icon)",
+     "source": "booking/v2/Booking.js renderStepButtons \u2014 one Next shared by every step",
+     "note": "Matched on the button, not its label. While a step is computing, Booking.js swaps the \"Next\" span for a <Spinner>, so a text selector drops to zero matches exactly when the plan wants to click. The disabled attribute is still there, so Playwright waits it out."
     },
     {
      "id": "sh.step.route",
@@ -7068,21 +7071,9 @@
      "name": "Next",
      "action": "click",
      "async": true,
-     "selector": "button.button-green:has(span:text-is(\"Next\"))",
-     "source": "BookingPage.ROUTE_NEXT_BUTTON",
-     "api": {
-      "await": {
-       "method": "POST",
-       "path": "/api/2/jobs/distance",
-       "status": [
-        200
-       ],
-       "timeoutMs": 30000,
-       "reads": true,
-       "confidence": "client"
-      },
-      "note": "Distance drives the quoted price, so the summary total is not trustworthy until this settles."
-     }
+     "selector": "div.form-actions button.button-green:not(.button-with-icon)",
+     "source": "booking/v2/Booking.js renderStepButtons \u2014 one Next shared by every step",
+     "note": "Matched on the button, not its label. While a step is computing, Booking.js swaps the \"Next\" span for a <Spinner>, so a text selector drops to zero matches exactly when the plan wants to click. The disabled attribute is still there, so Playwright waits it out. The distance POST is NOT this button: getDistance() fires from the stop/address changes as soon as every stop has coords, so it has already happened by the time Next is clicked, and awaiting it here waited for a response that never came again."
     },
     {
      "id": "sh.step.review",
@@ -7128,8 +7119,8 @@
      "name": "Book",
      "action": "click",
      "async": true,
-     "selector": "button.button-green:has-text(\"Book\")",
-     "source": "BookingPage.REVIEW_BOOK_BUTTON",
+     "selector": "div.form-actions button.button-green.button-with-icon",
+     "source": "booking/v2/Booking.js renderBookButton",
      "api": {
       "await": {
        "method": "POST",
@@ -7161,7 +7152,8 @@
       },
       "settleMs": 30000,
       "note": "apps/admin-client-legacy/src/main/js/utils/ShipmentWebAPIUtils.js posts to /api/v3/offers; /api/v2/offers is the older twin still live."
-     }
+     },
+     "note": "button-with-icon is what separates Book from Next; both are button-green inside form-actions."
     },
     {
      "id": "sh.booked",
