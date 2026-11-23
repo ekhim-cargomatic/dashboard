@@ -401,16 +401,50 @@ def perform(page, step: dict, config: dict, variables: dict) -> str:
 
     if verb == "pickOption":
         ready(target)
-        target.click()
-        # The trigger for a multiselect is often a <button> that opens a popover
-        # with its own search box. fill() on a button throws, which read as "the
-        # selector is wrong" when the selector was right — the value simply does
-        # not belong on that element. Where there is no fillable target, the
-        # value is carried by a `type` follow, or the option is clicked by name.
-        if value and target.evaluate(
+        fillable = target.evaluate(
             "el => el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable"
-        ):
+        )
+        if fillable:
+            # focus(), not click(). A click is actionability-checked, so it
+            # blocks on whatever is painted over the element — and in this form
+            # the PREVIOUS field's menu is painted over this one by design:
+            # booking/v2/Location.js gives the location-name SearchBox
+            # menuStyle {position:absolute, top:40}, which lands squarely on
+            # the LocationAutosuggest box in the next grid cell. The result was
+            # a 30s timeout whose own diagnostics said visible=True, matches=1,
+            # with a real box — because the element was fine and something was
+            # merely on top of it. focus() does not care what is on top.
+            # The suite reached the same conclusion: _focus_and_fill in
+            # pages/shipperPortal/shipper_book_shipment_page.py focuses, and
+            # only falls back to a FORCED click.
+            try:
+                target.focus()
+            except PlaywrightError:
+                target.click(force=True)
+        else:
+            # The trigger for a multiselect is often a <button> that opens a
+            # popover with its own search box. fill() on a button throws, which
+            # read as "the selector is wrong" when the selector was right — the
+            # value simply does not belong on that element. Where there is no
+            # fillable target, the value is carried by a `type` follow, or the
+            # option is clicked by name.
+            target.click()
+        if value and fillable:
+            target.fill("")
             target.fill(value)
+            # fill() sets the whole value at once. Both typeaheads on this form
+            # hang off a debounce — location-autosuggest.js wraps its request in
+            # debounce(..., 500) — and open their menu in response to typing, so
+            # a one-shot fill can leave the list closed and the follow below
+            # with nothing to click. A space and a backspace leave the value
+            # byte-identical while giving the component the keystrokes it is
+            # waiting for. The suite does exactly this after every
+            # _focus_and_fill, for the same reason.
+            try:
+                target.type(" ")
+                target.press("Backspace")
+            except PlaywrightError:
+                pass
         # A typeahead fires per keystroke; the list is not the list until it settles.
         page.wait_for_timeout(step.get("settleMs") or 1200)
         for follow in step.get("follow") or []:
@@ -429,13 +463,26 @@ def perform(page, step: dict, config: dict, variables: dict) -> str:
                 try:
                     nxt.wait_for(state="visible", timeout=follow.get("timeoutMs", 4000))
                 except PlaywrightTimeout:
-                    log(f"     {step['name']}: no {action[:-9]} appeared, carrying on")
+                    # Dismiss it, do not merely carry on. A menu this step
+                    # declined to pick from is still open, and an open menu
+                    # covers the field below it — so carrying on moved the
+                    # failure to the NEXT step and reported it against a
+                    # selector that was never wrong. Escape is what the suite
+                    # presses when an optional suggestion does not show.
+                    log(f"     {step['name']}: no {action[:-9]} appeared, dismissed the menu")
+                    try:
+                        target.press("Escape")
+                    except PlaywrightError:
+                        pass
                     continue
-                nxt.click()
+                nxt.click(force=True)
                 page.wait_for_timeout(step.get("settleMs") or 600)
                 continue
             ready(nxt, label=f"{step['name']} suggestion list")
-            nxt.click()
+            # Forced, like the suite's _click_first_suggestion_required: these
+            # menus are absolutely positioned and can still be settling under
+            # the cursor when the click lands.
+            nxt.click(force=True)
         return f"picked an option for {step['name']}"
 
     if verb in ("click", "clickMenuItem", "clickTab"):
